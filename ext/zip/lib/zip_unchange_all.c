@@ -17,7 +17,7 @@
   3. The names of the authors may not be used to endorse or promote
      products derived from this software without specific prior
      written permission.
- 
+
   THIS SOFTWARE IS PROVIDED BY THE AUTHORS ``AS IS'' AND ANY EXPRESS
   OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
   WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -31,18 +31,19 @@
   IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-
+
 
 #include <stdlib.h>
 
 #include "zipint.h"
 
-
 
-ZIP_EXTERN(int)
+
+ZIP_EXTERN int
 zip_unchange_all(struct zip *za)
 {
-    int ret, i;
+    int ret;
+    zip_uint64_t i;
 
     ret = 0;
     for (i=0; i<za->nentry; i++)

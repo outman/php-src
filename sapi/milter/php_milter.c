@@ -1,8 +1,8 @@
 /*
    +----------------------------------------------------------------------+
-   | PHP Version 5                                                        |
+   | PHP Version 7                                                        |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1997-2013 The PHP Group                                |
+   | Copyright (c) 1997-2015 The PHP Group                                |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -113,21 +113,20 @@ static int mlfi_init()
 	zend_file_handle file_handle;
 	zval function_name, retval;
 	int status;
-	TSRMLS_FETCH();
 
 	/* request startup */
-	if (php_request_startup(TSRMLS_C)==FAILURE) {
+	if (php_request_startup()==FAILURE) {
 		SG(headers_sent) = 1;
 		SG(request_info).no_headers = 1;
 		php_request_shutdown((void *) 0);
 
 		return -1;
 	}
-	
+
 	/* disable headers */
 	SG(headers_sent) = 1;
 	SG(request_info).no_headers = 1;
-	 
+
 	if (filename == NULL) {
 		php_printf("No input file specified");
 		return SMFIS_TEMPFAIL;
@@ -143,8 +142,8 @@ static int mlfi_init()
 	file_handle.free_filename = 0;
 	file_handle.opened_path = NULL;
 
-	php_execute_script(&file_handle TSRMLS_CC);
-	
+	php_execute_script(&file_handle);
+
 	/* call userland */
 	INIT_ZVAL(function_name);
 
@@ -153,7 +152,7 @@ static int mlfi_init()
 	/* set the milter context for possible use in API functions */
 	MG(state) = MLFI_INIT;
 
-	status = call_user_function(CG(function_table), NULL, &function_name, &retval, 0, NULL TSRMLS_CC);
+	status = call_user_function(CG(function_table), NULL, &function_name, &retval, 0, NULL);
 
 	MG(state) = MLFI_NONE;
 	MG(initialized) = 1;
@@ -161,9 +160,9 @@ static int mlfi_init()
 	if (status == SUCCESS && Z_TYPE(retval) == IS_LONG) {
 		ret = Z_LVAL(retval);
 	}
-	
+
 	php_request_shutdown((void *) 0);
-	
+
 	return ret;
 }
 /* }}} */
@@ -179,26 +178,25 @@ static sfsistat	mlfi_connect(SMFICTX *ctx, char *hostname, _SOCK_ADDR *hostaddr)
 	zend_file_handle file_handle;
 	zval function_name, retval, *param[1];
 	int status;
-	TSRMLS_FETCH();
 
 	/* request startup */
-	if (php_request_startup(TSRMLS_C)==FAILURE) {
+	if (php_request_startup()==FAILURE) {
 		SG(headers_sent) = 1;
 		SG(request_info).no_headers = 1;
 		php_request_shutdown((void *) 0);
 
 		return SMFIS_TEMPFAIL;
 	}
-	
+
 	/* disable headers */
 	SG(headers_sent) = 1;
 	SG(request_info).no_headers = 1;
-	
+
 	if (filename == NULL) {
 		php_printf("No input file specified");
 		return SMFIS_TEMPFAIL;
 	}
-	
+
 	if (!(file_handle.handle.fp = VCWD_FOPEN(filename, "rb"))) {
 		php_printf("Could not open input file: %s\n", filename);
 		return SMFIS_TEMPFAIL;
@@ -209,8 +207,8 @@ static sfsistat	mlfi_connect(SMFICTX *ctx, char *hostname, _SOCK_ADDR *hostaddr)
 	file_handle.free_filename = 0;
 	file_handle.opened_path = NULL;
 
-	php_execute_script(&file_handle TSRMLS_CC);
-	
+	php_execute_script(&file_handle);
+
 	/* call userland */
 	INIT_ZVAL(function_name);
 
@@ -224,14 +222,14 @@ static sfsistat	mlfi_connect(SMFICTX *ctx, char *hostname, _SOCK_ADDR *hostaddr)
 	MG(ctx) = ctx;
 	MG(state) = MLFI_CONNECT;
 
-	status = call_user_function(CG(function_table), NULL, &function_name, &retval, 1, param TSRMLS_CC);
+	status = call_user_function(CG(function_table), NULL, &function_name, &retval, 1, param);
 
 	MG(state) = MLFI_NONE;
 	zval_ptr_dtor(param);
 	if (status == SUCCESS && Z_TYPE(retval) == IS_LONG) {
 		return Z_LVAL(retval);
 	}
-	
+
 	return SMFIS_CONTINUE;
 }
 /* }}} */
@@ -243,11 +241,10 @@ static sfsistat mlfi_helo(SMFICTX *ctx, char *helohost)
 {
 	zval function_name, retval, *param[1];
 	int status;
-	TSRMLS_FETCH();
 
 	/* call userland */
 	INIT_ZVAL(function_name);
-	
+
 	ALLOC_ZVAL(param[0]);
 	INIT_PZVAL(param[0]);
 
@@ -257,16 +254,16 @@ static sfsistat mlfi_helo(SMFICTX *ctx, char *helohost)
 	/* set the milter context for possible use in API functions */
 	MG(ctx) = ctx;
 	MG(state) = MLFI_HELO;
-	
-	status = call_user_function(CG(function_table), NULL, &function_name, &retval, 1, param TSRMLS_CC);
+
+	status = call_user_function(CG(function_table), NULL, &function_name, &retval, 1, param);
 
 	MG(state) = MLFI_NONE;
 	zval_ptr_dtor(param);
-	
+
 	if (status == SUCCESS && Z_TYPE(retval) == IS_LONG) {
 		return Z_LVAL(retval);
 	}
-	
+
 	return SMFIS_CONTINUE;
 }
 /* }}} */
@@ -278,11 +275,10 @@ static sfsistat mlfi_envfrom(SMFICTX *ctx, char **argv)
 {
 	zval function_name, retval, *param[1];
 	int status;
-	TSRMLS_FETCH();
 
 	/* call userland */
 	INIT_ZVAL(function_name);
-	
+
 	ALLOC_ZVAL(param[0]);
 	INIT_PZVAL(param[0]);
 
@@ -290,19 +286,19 @@ static sfsistat mlfi_envfrom(SMFICTX *ctx, char **argv)
 	array_init(param[0]);
 
 	while (*argv) {
-		add_next_index_string(param[0], *argv, 1);
+		add_next_index_string(param[0], *argv);
 		argv++;
 	}
 
 	/* set the milter context for possible use in API functions */
 	MG(ctx) = ctx;
 	MG(state) = MLFI_ENVFROM;
-	
-	status = call_user_function(CG(function_table), NULL, &function_name, &retval, 1, param TSRMLS_CC);
+
+	status = call_user_function(CG(function_table), NULL, &function_name, &retval, 1, param);
 
 	MG(state) = MLFI_NONE;
 	zval_ptr_dtor(param);
-	
+
 	if (status == SUCCESS && Z_TYPE(retval) == IS_LONG) {
 		return Z_LVAL(retval);
 	}
@@ -318,11 +314,10 @@ static sfsistat mlfi_envrcpt(SMFICTX *ctx, char **argv)
 {
 	zval function_name, retval, *param[1];
 	int status;
-	TSRMLS_FETCH();
 
 	/* call userland */
 	INIT_ZVAL(function_name);
-	
+
 	ALLOC_ZVAL(param[0]);
 	INIT_PZVAL(param[0]);
 
@@ -330,20 +325,20 @@ static sfsistat mlfi_envrcpt(SMFICTX *ctx, char **argv)
 	array_init(param[0]);
 
 	while (*argv) {
-		add_next_index_string(param[0], *argv, 1);
+		add_next_index_string(param[0], *argv);
 		argv++;
 	}
 
 	/* set the milter context for possible use in API functions */
 	MG(ctx) = ctx;
 	MG(state) = MLFI_ENVRCPT;
-	
-	status = call_user_function(CG(function_table), NULL, &function_name, &retval, 1, param TSRMLS_CC);
+
+	status = call_user_function(CG(function_table), NULL, &function_name, &retval, 1, param);
 
 	MG(state) = MLFI_NONE;
-	
+
 	zval_ptr_dtor(param);
-	
+
 	if (status == SUCCESS && Z_TYPE(retval) == IS_LONG) {
 		return Z_LVAL(retval);
 	}
@@ -359,16 +354,15 @@ static sfsistat mlfi_header(SMFICTX *ctx, char *headerf, char *headerv)
 {
 	zval function_name, retval, *param[2];
 	int status;
-	TSRMLS_FETCH();
 
 	/* call userland */
 	INIT_ZVAL(function_name);
-	
+
 	ALLOC_ZVAL(param[0]);
 	ALLOC_ZVAL(param[1]);
 	INIT_PZVAL(param[0]);
 	INIT_PZVAL(param[1]);
-	
+
 	ZVAL_STRING(&function_name, "milter_header", 0);
 	ZVAL_STRING(param[0], headerf, 1);
 	ZVAL_STRING(param[1], headerv, 1);
@@ -376,18 +370,18 @@ static sfsistat mlfi_header(SMFICTX *ctx, char *headerf, char *headerv)
 	/* set the milter context for possible use in API functions */
 	MG(ctx) = ctx;
 	MG(state) = MLFI_HEADER;
-	
-	status = call_user_function(CG(function_table), NULL, &function_name, &retval, 2, param TSRMLS_CC);
+
+	status = call_user_function(CG(function_table), NULL, &function_name, &retval, 2, param);
 
 	MG(state) = MLFI_NONE;
-	
+
 	zval_ptr_dtor(&param[0]);
-	zval_ptr_dtor(&param[1]);	
-	
+	zval_ptr_dtor(&param[1]);
+
 	if (status == SUCCESS && Z_TYPE(retval) == IS_LONG) {
 		return Z_LVAL(retval);
 	}
-	
+
 	return SMFIS_CONTINUE;
 }
 /* }}} */
@@ -399,7 +393,6 @@ static sfsistat mlfi_eoh(SMFICTX *ctx)
 {
 	zval function_name, retval;
 	int status;
-	TSRMLS_FETCH();
 
 	/* call userland */
 	INIT_ZVAL(function_name);
@@ -408,11 +401,11 @@ static sfsistat mlfi_eoh(SMFICTX *ctx)
 	/* set the milter context for possible use in API functions */
 	MG(ctx) = ctx;
 	MG(state) = MLFI_EOH;
-	
-	status = call_user_function(CG(function_table), NULL, &function_name, &retval, 0, NULL TSRMLS_CC);
+
+	status = call_user_function(CG(function_table), NULL, &function_name, &retval, 0, NULL);
 
 	MG(state) = MLFI_NONE;
-	
+
 	if (status == SUCCESS && Z_TYPE(retval) == IS_LONG) {
 		return Z_LVAL(retval);
 	}
@@ -428,26 +421,25 @@ static sfsistat mlfi_body(SMFICTX *ctx, u_char *bodyp, size_t len)
 {
 	zval function_name, retval, *param[1];
 	int status;
-	TSRMLS_FETCH();
 
 	/* call userland */
 	INIT_ZVAL(function_name);
-	
+
 	ALLOC_ZVAL(param[0]);
 	INIT_PZVAL(param[0]);
 
 	ZVAL_STRING(&function_name, "milter_body", 0);
 	ZVAL_STRINGL(param[0], (char*)bodyp, len, 1); /*alex*/
-	
+
 	/* set the milter context for possible use in API functions */
 	MG(ctx) = ctx;
 	MG(state) = MLFI_BODY;
-	
-	status = call_user_function(CG(function_table), NULL, &function_name, &retval, 1, param TSRMLS_CC);
+
+	status = call_user_function(CG(function_table), NULL, &function_name, &retval, 1, param);
 
 	MG(state) = MLFI_NONE;
-	
-	zval_ptr_dtor(param);	
+
+	zval_ptr_dtor(param);
 
 	if (status == SUCCESS && Z_TYPE(retval) == IS_LONG) {
 		return Z_LVAL(retval);
@@ -464,20 +456,19 @@ static sfsistat mlfi_eom(SMFICTX *ctx)
 {
 	zval function_name, retval;
 	int status;
-	TSRMLS_FETCH();
 
 	/* call userland */
 	INIT_ZVAL(function_name);
 	ZVAL_STRING(&function_name, "milter_eom", 0);
-	
+
 	/* set the milter context for possible use in API functions */
 	MG(ctx) = ctx;
 	MG(state) = MLFI_EOM;
 
-	status = call_user_function(CG(function_table), NULL, &function_name, &retval, 0, NULL TSRMLS_CC);
+	status = call_user_function(CG(function_table), NULL, &function_name, &retval, 0, NULL);
 
 	MG(state) = MLFI_NONE;
-	
+
 	if (status == SUCCESS && Z_TYPE(retval) == IS_LONG) {
 		return Z_LVAL(retval);
 	}
@@ -493,20 +484,19 @@ static sfsistat mlfi_abort(SMFICTX *ctx)
 {
 	zval function_name, retval;
 	int status;
-	TSRMLS_FETCH();
 
 	/* call userland */
 	INIT_ZVAL(function_name);
 	ZVAL_STRING(&function_name, "milter_abort", 0);
-	
+
 	/* set the milter context for possible use in API functions */
 	MG(ctx) = ctx;
 	MG(state) = MLFI_ABORT;
-	
-	status = call_user_function(CG(function_table), NULL, &function_name, &retval, 0, NULL TSRMLS_CC);
+
+	status = call_user_function(CG(function_table), NULL, &function_name, &retval, 0, NULL);
 
 	MG(state) = MLFI_NONE;
-	
+
 	if (status == SUCCESS && Z_TYPE(retval) == IS_LONG) {
 		return Z_LVAL(retval);
 	}
@@ -523,24 +513,27 @@ static sfsistat mlfi_close(SMFICTX *ctx)
 	int ret = SMFIS_CONTINUE;
 	zval function_name, retval;
 	int status;
-	TSRMLS_FETCH();
+
+	if (!SG(sapi_started) && SUCCESS != php_request_startup()) {
+		return ret;
+	}
 
 	/* call userland */
 	INIT_ZVAL(function_name);
 	ZVAL_STRING(&function_name, "milter_close", 0);
-	
+
 	/* set the milter context for possible use in API functions */
 	MG(ctx) = ctx;
 	MG(state) = MLFI_CLOSE;
-	
-	status = call_user_function(CG(function_table), NULL, &function_name, &retval, 0, NULL TSRMLS_CC);
+
+	status = call_user_function(CG(function_table), NULL, &function_name, &retval, 0, NULL);
 
 	MG(state) = MLFI_NONE;
-	
+
 	if (status == SUCCESS && Z_TYPE(retval) == IS_LONG) {
 		ret = Z_LVAL(retval);
 	}
-	
+
 	php_request_shutdown((void *) 0);
 
 	return ret;
@@ -550,7 +543,7 @@ static sfsistat mlfi_close(SMFICTX *ctx)
 
 /* {{{ Milter entry struct
  */
-struct smfiDesc smfilter = {
+static struct smfiDesc smfilter = {
     "php-milter",	/* filter name */
     SMFI_VERSION,   /* version code -- leave untouched */
     0,				/* flags */
@@ -571,38 +564,38 @@ struct smfiDesc smfilter = {
  */
 
 /* {{{ proto void smfi_setflags(long flags)
-   Sets the flags describing the actions the filter may take. */	
+   Sets the flags describing the actions the filter may take. */
 PHP_FUNCTION(smfi_setflags)
 {
 	long flags;
-	
+
 	/* valid only in the init callback */
 	if (MG(state) != MLFI_INIT) {
-		php_error(E_WARNING, NOT_INIT, get_active_function_name(TSRMLS_C));
-	} else if (zend_parse_parameters(1 TSRMLS_CC, "l", &flags) == SUCCESS) {
+		php_error(E_WARNING, NOT_INIT, get_active_function_name());
+	} else if (zend_parse_parameters(1, "l", &flags) == SUCCESS) {
 		flags = flags & (SMFIF_ADDHDRS|SMFIF_CHGHDRS|SMFIF_CHGBODY|SMFIF_ADDRCPT|SMFIF_DELRCPT);
 		smfilter.xxfi_flags = flags;
-	}	
+	}
 }
 /* }}} */
 
 /* {{{ proto void smfi_settimeout(long timeout)
-   Sets the number of seconds libmilter will wait for an MTA connection before timing out a socket. */	
+   Sets the number of seconds libmilter will wait for an MTA connection before timing out a socket. */
 PHP_FUNCTION(smfi_settimeout)
 {
 	long timeout;
-	
+
 	/* valid only in the init callback */
 	if (MG(state) != MLFI_INIT) {
-		php_error(E_WARNING, NOT_INIT, get_active_function_name(TSRMLS_C));
-	} else if (zend_parse_parameters(1 TSRMLS_CC, "l", &timeout) == SUCCESS) {
+		php_error(E_WARNING, NOT_INIT, get_active_function_name());
+	} else if (zend_parse_parameters(1, "l", &timeout) == SUCCESS) {
 		smfi_settimeout(timeout);
-	}	
+	}
 }
 /* }}} */
 
 /* {{{ proto string smfi_getsymval(string macro)
-   Returns the value of the given macro or NULL if the macro is not defined. */	
+   Returns the value of the given macro or NULL if the macro is not defined. */
 PHP_FUNCTION(smfi_getsymval)
 {
 	char *symname, *ret;
@@ -610,8 +603,8 @@ PHP_FUNCTION(smfi_getsymval)
 
 	/* valid in any callback */
 	if (MG(state) == MLFI_NONE) {
-		php_error(E_WARNING, IS_NONE, get_active_function_name(TSRMLS_C));
-	} else if (zend_parse_parameters(1 TSRMLS_CC, "s", &symname, &len) == SUCCESS) {
+		php_error(E_WARNING, IS_NONE, get_active_function_name());
+	} else if (zend_parse_parameters(1, "s", &symname, &len) == SUCCESS) {
 		if ((ret = smfi_getsymval(MG(ctx), symname)) != NULL) {
 			RETURN_STRING(ret, 1);
 		}
@@ -623,123 +616,123 @@ PHP_FUNCTION(smfi_getsymval)
 
 /* {{{ proto bool smfi_setreply(string rcode, string xcode, string message)
    Directly set the SMTP error reply code for this connection.
-   This code will be used on subsequent error replies resulting from actions taken by this filter. */	
+   This code will be used on subsequent error replies resulting from actions taken by this filter. */
 PHP_FUNCTION(smfi_setreply)
 {
 	char *rcode, *xcode, *message;
 	int len;
-	
+
 	/* valid in any callback */
 	if (MG(state) == MLFI_NONE) {
-		php_error(E_WARNING, IS_NONE, get_active_function_name(TSRMLS_C));
-	} else if (zend_parse_parameters(3 TSRMLS_CC, "sss", &rcode, &len, &xcode, &len, &message, &len) == SUCCESS) {
+		php_error(E_WARNING, IS_NONE, get_active_function_name());
+	} else if (zend_parse_parameters(3, "sss", &rcode, &len, &xcode, &len, &message, &len) == SUCCESS) {
 		if (smfi_setreply(MG(ctx), rcode, xcode, message) == MI_SUCCESS) {
 			RETURN_TRUE;
 		}
 	}
-	
+
 	RETURN_FALSE;
 }
 /* }}} */
 
 /* {{{ proto bool smfi_addheader(string headerf, string headerv)
-   Adds a header to the current message. */	
+   Adds a header to the current message. */
 PHP_FUNCTION(smfi_addheader)
 {
 	char *f, *v;
 	int len;
-	
+
 	/* valid only in milter_eom */
 	if (MG(state) != MLFI_EOM) {
-		php_error(E_WARNING, NOT_EOM, get_active_function_name(TSRMLS_C));
-	} else if (zend_parse_parameters(2 TSRMLS_CC, "ss", &f, &len, &v, &len) == SUCCESS) {
+		php_error(E_WARNING, NOT_EOM, get_active_function_name());
+	} else if (zend_parse_parameters(2, "ss", &f, &len, &v, &len) == SUCCESS) {
 		if (smfi_addheader(MG(ctx), f, v) == MI_SUCCESS) {
 			RETURN_TRUE;
 		}
 	}
-	
+
 	RETURN_FALSE;
 }
 /* }}} */
 
 /* {{{ proto bool smfi_chgheader(string headerf, string headerv)
-   Changes a header's value for the current message. */	
+   Changes a header's value for the current message. */
 PHP_FUNCTION(smfi_chgheader)
 {
 	char *f, *v;
 	long idx;
 	int len;
-	
+
 	/* valid only in milter_eom */
 	if (MG(state) != MLFI_EOM) {
-		php_error(E_WARNING, NOT_EOM, get_active_function_name(TSRMLS_C));
-	} else if (zend_parse_parameters(3 TSRMLS_CC, "sls", &f, &len, &idx, &v, &len) == SUCCESS) {
+		php_error(E_WARNING, NOT_EOM, get_active_function_name());
+	} else if (zend_parse_parameters(3, "sls", &f, &len, &idx, &v, &len) == SUCCESS) {
 		if (smfi_chgheader(MG(ctx), f, idx, v) == MI_SUCCESS) {
 			RETURN_TRUE;
 		}
 	}
-	
+
 	RETURN_FALSE;
 }
 /* }}} */
 
 /* {{{ proto bool smfi_addrcpt(string rcpt)
-   Add a recipient to the message envelope. */	
+   Add a recipient to the message envelope. */
 PHP_FUNCTION(smfi_addrcpt)
 {
 	char *rcpt;
 	int len;
-	
+
 	/* valid only in milter_eom */
 	if (MG(state) != MLFI_EOM) {
-		php_error(E_WARNING, NOT_EOM, get_active_function_name(TSRMLS_C));
-	} else if (zend_parse_parameters(1 TSRMLS_CC, "s", &rcpt, &len) == SUCCESS) {
+		php_error(E_WARNING, NOT_EOM, get_active_function_name());
+	} else if (zend_parse_parameters(1, "s", &rcpt, &len) == SUCCESS) {
 		if (smfi_addrcpt(MG(ctx), rcpt) == MI_SUCCESS) {
 			RETURN_TRUE;
 		}
 	}
-	
+
 	RETURN_FALSE;
 }
 /* }}} */
 
 /* {{{ proto bool smfi_delrcpt(string rcpt)
-   Removes the named recipient from the current message's envelope. */	
+   Removes the named recipient from the current message's envelope. */
 PHP_FUNCTION(smfi_delrcpt)
 {
 	char *rcpt;
 	int len;
-	
+
 	/* valid only in milter_eom */
 	if (MG(state) != MLFI_EOM) {
-		php_error(E_WARNING, NOT_EOM, get_active_function_name(TSRMLS_C));
-	} else if (zend_parse_parameters(1 TSRMLS_CC, "s", &rcpt, &len) == SUCCESS) {
+		php_error(E_WARNING, NOT_EOM, get_active_function_name());
+	} else if (zend_parse_parameters(1, "s", &rcpt, &len) == SUCCESS) {
 		if (smfi_delrcpt(MG(ctx), rcpt) == MI_SUCCESS) {
 			RETURN_TRUE;
 		}
 	}
-	
+
 	RETURN_FALSE;
 }
 /* }}} */
 
 /* {{{ proto bool smfi_replacebody(string body)
    Replaces the body of the current message. If called more than once,
-   subsequent calls result in data being appended to the new body. */	
+   subsequent calls result in data being appended to the new body. */
 PHP_FUNCTION(smfi_replacebody)
 {
 	char *body;
 	int len;
-	
+
 	/* valid only in milter_eom */
 	if (MG(state) != MLFI_EOM) {
-		php_error(E_WARNING, NOT_EOM, get_active_function_name(TSRMLS_C));
-	} else if (zend_parse_parameters(1 TSRMLS_CC, "s", &body, &len) == SUCCESS) {
+		php_error(E_WARNING, NOT_EOM, get_active_function_name());
+	} else if (zend_parse_parameters(1, "s", &body, &len) == SUCCESS) {
 		if (smfi_replacebody(MG(ctx), (u_char*)body, len) == MI_SUCCESS) {
 			RETURN_TRUE;
 		}
 	}
-	
+
 	RETURN_FALSE;
 }
 /* }}} */
@@ -855,31 +848,27 @@ static zend_module_entry php_milter_module = {
 
 /* {{{ Milter SAPI
 */
-static int sapi_milter_ub_write(const char *str, uint str_length TSRMLS_DC)
+static int sapi_milter_ub_write(const char *str, uint str_length)
 {
 	return str_length;
 }
 
-static void sapi_milter_flush(void *server_context)
+static void sapi_milter_register_variables(zval *track_vars_array)
 {
+	php_register_variable ("SERVER_SOFTWARE", "Sendmail Milter", track_vars_array);
 }
 
-static void sapi_milter_register_variables(zval *track_vars_array TSRMLS_DC)
-{
-	php_register_variable ("SERVER_SOFTWARE", "Sendmail Milter", track_vars_array TSRMLS_CC);
-}
-
-static int sapi_milter_post_read(char *buf, uint count_bytes TSRMLS_DC)
+static int sapi_milter_post_read(char *buf, uint count_bytes)
 {
 	return 0;
 }
 
-static char* sapi_milter_read_cookies(TSRMLS_D)
+static char* sapi_milter_read_cookies(void)
 {
 	return NULL;
 }
 
-static int sapi_milter_send_headers(sapi_headers_struct *sapi_headers TSRMLS_DC)
+static int sapi_milter_send_headers(sapi_headers_struct *sapi_headers)
 {
 	return SAPI_HEADER_SENT_SUCCESSFULLY;
 }
@@ -906,7 +895,7 @@ static sapi_module_struct milter_sapi_module = {
 	NULL,							/* deactivate */
 
 	sapi_milter_ub_write,			/* unbuffered write */
-	sapi_milter_flush,				/* flush */
+	NULL,							/* flush */
 	NULL,							/* get uid */
 	NULL,							/* getenv */
 
@@ -1015,8 +1004,9 @@ int main(int argc, char *argv[])
 
 
 	tsrm_startup(1, 1, 0, NULL);
+	tsrm_ls = ts_resource(0);
 	sapi_startup(&milter_sapi_module);
-	
+
 	while ((c=ap_php_getopt(argc, argv, OPTSTRING))!=-1) {
 		switch (c) {
 		case 'c':
@@ -1032,7 +1022,6 @@ int main(int argc, char *argv[])
 
 	milter_sapi_module.executable_location = argv[0];
 
-	tsrm_ls = ts_resource(0);
 
 	sapi_module.startup(&milter_sapi_module);
 
@@ -1099,9 +1088,9 @@ int main(int argc, char *argv[])
 				break;
 
 			case 'v': /* show php version & quit */
-				if (php_request_startup(TSRMLS_C)==FAILURE) {
-					zend_ini_deactivate(TSRMLS_C);
-					php_module_shutdown(TSRMLS_C);
+				if (php_request_startup()==FAILURE) {
+					zend_ini_deactivate();
+					php_module_shutdown();
 					sapi_shutdown();
 					tsrm_shutdown();
 
@@ -1109,7 +1098,7 @@ int main(int argc, char *argv[])
 				}
 				SG(headers_sent) = 1;
 				SG(request_info).no_headers = 1;
-				php_printf("PHP %s (%s) (built: %s %s)\nCopyright (c) 1997-2013 The PHP Group\n%s", PHP_VERSION, sapi_module.name, __DATE__, __TIME__, get_zend_version());
+				php_printf("PHP %s (%s) (built: %s %s)\nCopyright (c) 1997-2015 The PHP Group\n%s", PHP_VERSION, sapi_module.name, __DATE__, __TIME__, get_zend_version());
 				php_output_teardown();
 				exit(1);
 				break;
@@ -1134,8 +1123,6 @@ int main(int argc, char *argv[])
 			exit(1);
 		}
 
-		CG(interactive) = interactive;
-
 		/* only set script_file if not set already and not in direct mode and not at end of parameter list */
 		if (argc > ap_php_optind && !filename) {
 			filename=argv[ap_php_optind];
@@ -1143,7 +1130,7 @@ int main(int argc, char *argv[])
 		}
 
 		/* check if file exists, exit else */
-		
+
 		if (dofork) {
 			switch(fork()) {
 				case -1: /* Uh-oh, we have a problem forking. */
@@ -1156,14 +1143,14 @@ int main(int argc, char *argv[])
 					exit(0);
 			}
 		}
-			
+
 		if (sock) {
 			struct stat junk;
 			if (stat(sock,&junk) == 0) unlink(sock);
 		}
 
 		openlog("php-milter", LOG_PID, LOG_MAIL);
-		
+
 		if ((exit_status = mlfi_init())) {
 			syslog(1, "mlfi_init failed.");
 			closelog();
@@ -1178,7 +1165,7 @@ int main(int argc, char *argv[])
 			goto err;
 		} else {
 			exit_status = smfi_main();
-		}			
+		}
 
 		closelog();
 
@@ -1191,7 +1178,7 @@ int main(int argc, char *argv[])
 	} zend_end_try();
 
 err:
-	php_module_shutdown(TSRMLS_C);
+	php_module_shutdown();
 	sapi_shutdown();
 	tsrm_shutdown();
 

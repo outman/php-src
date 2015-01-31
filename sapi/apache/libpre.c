@@ -1,8 +1,8 @@
 /*
   +----------------------------------------------------------------------+
-  | PHP Version 5                                                        |
+  | PHP Version 7                                                        |
   +----------------------------------------------------------------------+
-  | Copyright (c) 1997-2013 The PHP Group                                |
+  | Copyright (c) 1997-2015 The PHP Group                                |
   +----------------------------------------------------------------------+
   | This source file is subject to version 3.01 of the PHP license,      |
   | that is bundled with this package in the file LICENSE, and is        |
@@ -25,7 +25,7 @@
  * stops.  By using these functions instead of defining a main()
  * and calling ExitThread(TSR_THREAD, 0), the load time of the
  * shared NLM is faster and memory size reduced.
- * 
+ *
  * You may also want to override these in your own Apache module
  * to do any cleanup other than the mechanism Apache modules provide.
  * ------------------------------------------------------------------

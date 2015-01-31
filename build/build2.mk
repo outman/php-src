@@ -1,5 +1,5 @@
 #  +----------------------------------------------------------------------+
-#  | PHP Version 5                                                        |
+#  | PHP Version 7                                                        |
 #  +----------------------------------------------------------------------+
 #  | Copyright (c) 1997-2007 The PHP Group                                |
 #  +----------------------------------------------------------------------+
@@ -50,5 +50,6 @@ aclocal.m4: configure.in acinclude.m4
 
 configure: aclocal.m4 configure.in $(config_m4_files)
 	@echo rebuilding $@
+	@rm -f $@
 	$(PHP_AUTOCONF) $(SUPPRESS_WARNINGS)
 

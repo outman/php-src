@@ -38,7 +38,7 @@ $args_array = array(
   array(65, 66, 67),
   array(2e1, 2e-1, -2e1),
   array(-11, +22, 33),
-  array(012, -02394, +02389),
+  array(012, -023, +023),
   array(0x11, -0x22, +0x33),
   array(0x11, -0x22, +0x33),
   array(2e1, 2e-1, -2e1)
@@ -46,7 +46,7 @@ $args_array = array(
 
 
 /* creating dumping file */
-$data_file = dirname(__FILE__) . '/dump.txt';
+$data_file = dirname(__FILE__) . '/vfprintf_variation19.txt';
 if (!($fp = fopen($data_file, 'wt')))
    return;
    

@@ -1,6 +1,6 @@
 /*
   zip_source_error.c -- get last error from zip_source
-  Copyright (C) 2009 Dieter Baron and Thomas Klausner
+  Copyright (C) 2009-2015 Dieter Baron and Thomas Klausner
 
   This file is part of libzip, a library to manipulate ZIP archives.
   The authors can be contacted at <libzip@nih.at>
@@ -17,7 +17,7 @@
   3. The names of the authors may not be used to endorse or promote
      products derived from this software without specific prior
      written permission.
- 
+
   THIS SOFTWARE IS PROVIDED BY THE AUTHORS ``AS IS'' AND ANY EXPRESS
   OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
   WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -31,30 +31,27 @@
   IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-
+
 
 #include "zipint.h"
 
-
 
-ZIP_EXTERN(void)
+
+void
 zip_source_error(struct zip_source *src, int *ze, int *se)
 {
     int e[2];
 
     if (src->src == NULL) {
+        if (src->cb.f(src->ud, e, sizeof(e), ZIP_SOURCE_ERROR) < 0) {
+            e[0] = ZIP_ER_INTERNAL;
+            e[1] = 0;
+        }
     }
     else {
 	switch (src->error_source) {
 	case ZIP_LES_NONE:
-	    if (src->src == NULL) {
-		if (src->cb.f(src->ud, e, sizeof(e), ZIP_SOURCE_ERROR) < 0) {
-		    e[0] = ZIP_ER_INTERNAL;
-		    e[1] = 0;
-		}
-	    }
-	    else
-		e[0] = e[1] = 0;
+	    e[0] = e[1] = 0;
 	    break;
 
 	case ZIP_LES_INVAL:
@@ -67,8 +64,7 @@ zip_source_error(struct zip_source *src, int *ze, int *se)
 	    return;
 
 	case ZIP_LES_UPPER:
-	    if (src->cb.l(src->src, src->ud, e, sizeof(e),
-			  ZIP_SOURCE_ERROR) < 0) {
+	    if (src->cb.l(src->src, src->ud, e, sizeof(e), ZIP_SOURCE_ERROR) < 0) {
 		e[0] = ZIP_ER_INTERNAL;
 		e[1] = 0;
 	    }
@@ -77,6 +73,7 @@ zip_source_error(struct zip_source *src, int *ze, int *se)
 	default:
 	    e[0] = ZIP_ER_INTERNAL;
 	    e[1] = 0;
+	    break;
 	}
     }
 

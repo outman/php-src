@@ -1,8 +1,8 @@
 /*
   +----------------------------------------------------------------------+
-  | PHP Version 5                                                        |
+  | PHP Version 7                                                        |
   +----------------------------------------------------------------------+
-  | Copyright (c) 1997-2013 The PHP Group                                |
+  | Copyright (c) 1997-2015 The PHP Group                                |
   +----------------------------------------------------------------------+
   | This source file is subject to version 3.01 of the PHP license,      |
   | that is bundled with this package in the file LICENSE, and is        |
@@ -40,7 +40,7 @@ typedef char * caddr_t;
 #define S_IFIFO		_IFIFO
 #define S_IFBLK		_IFBLK
 #define	S_IFLNK		_IFLNK
-#ifndef S_ISREG 
+#ifndef S_ISREG
 #define S_ISREG(m) (((m) & S_IFMT) == S_IFREG)
 #endif
 #define chdir(path) _chdir(path)
@@ -55,7 +55,7 @@ typedef char * caddr_t;
 typedef unsigned int uint;
 typedef unsigned long ulong;
 #if !NSAPI
-typedef long pid_t;
+typedef int pid_t;
 #endif
 
 /* missing in vc5 math.h */

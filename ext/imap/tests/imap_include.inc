@@ -1,6 +1,6 @@
 <?php
 // Change these to make tests run successfully
-$server   = '{localhost/norsh}';
+$server   = '{127.0.0.1/norsh}';
 $default_mailbox = $server . "INBOX";
 $domain = "something.com";
 $admin_user = "webmaster"; // a user with admin access 
@@ -61,7 +61,7 @@ function displayOverviewFields($resp, $fields=null) {
  * @param string mailbox_suffix Suffix used to uniquely identify mailboxes
  * @param int message_count number of test msgs to be written to new mailbox 
  * 
- * @return IMAP stream to new mailbox on sucesss; FALSE on failure
+ * @return IMAP stream to new mailbox on success; FALSE on failure
  */
 function setup_test_mailbox($mailbox_suffix, $message_count, &$new_mailbox = null, $msg_type = "simple"){
 	global $server, $default_mailbox, $username, $password;

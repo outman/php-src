@@ -1,8 +1,8 @@
 /*
   +----------------------------------------------------------------------+
-  | PHP Version 5                                                        |
+  | PHP Version 7                                                        |
   +----------------------------------------------------------------------+
-  | Copyright (c) 1997-2013 The PHP Group                                |
+  | Copyright (c) 1997-2015 The PHP Group                                |
   +----------------------------------------------------------------------+
   | This source file is subject to version 3.01 of the PHP license,      |
   | that is bundled with this package in the file LICENSE, and is        |
@@ -68,7 +68,7 @@ zend_module_entry pdo_oci_module_entry = {
 ZEND_GET_MODULE(pdo_oci)
 #endif
 
-const ub4 PDO_OCI_INIT_MODE = 
+const ub4 PDO_OCI_INIT_MODE =
 #if 0 && defined(OCI_SHARED)
 			/* shared mode is known to be bad for PHP */
 			OCI_SHARED

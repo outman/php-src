@@ -17,7 +17,7 @@
   3. The names of the authors may not be used to endorse or promote
      products derived from this software without specific prior
      written permission.
- 
+
   THIS SOFTWARE IS PROVIDED BY THE AUTHORS ``AS IS'' AND ANY EXPRESS
   OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
   WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -31,7 +31,7 @@
   IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-
+
 
 #include <stdlib.h>
 #include <string.h>
@@ -46,9 +46,9 @@ struct read_data {
 
 static zip_int64_t read_data(void *, void *, zip_uint64_t, enum zip_source_cmd);
 
-
 
-ZIP_EXTERN(struct zip_source *)
+
+ZIP_EXTERN struct zip_source *
 zip_source_buffer(struct zip *za, const void *data, zip_uint64_t len, int freep)
 {
     struct read_data *f;
@@ -71,7 +71,7 @@ zip_source_buffer(struct zip *za, const void *data, zip_uint64_t len, int freep)
     f->end = ((const char *)data)+len;
     f->freep = freep;
     f->mtime = time(NULL);
-    
+
     if ((zs=zip_source_function(za, read_data, f)) == NULL) {
 	free(f);
 	return NULL;
@@ -80,7 +80,7 @@ zip_source_buffer(struct zip *za, const void *data, zip_uint64_t len, int freep)
     return zs;
 }
 
-
+
 
 static zip_int64_t
 read_data(void *state, void *data, zip_uint64_t len, enum zip_source_cmd cmd)
@@ -96,11 +96,9 @@ read_data(void *state, void *data, zip_uint64_t len, enum zip_source_cmd cmd)
     case ZIP_SOURCE_OPEN:
 	z->buf = z->data;
 	return 0;
-	
-    case ZIP_SOURCE_READ:
-	/* XXX: return error if (len > ZIP_INT64_MAX) */
 
-	n = z->end - z->buf;
+    case ZIP_SOURCE_READ:
+	n = (zip_uint64_t)(z->end - z->buf);
 	if (n > len)
 	    n = len;
 
@@ -109,15 +107,15 @@ read_data(void *state, void *data, zip_uint64_t len, enum zip_source_cmd cmd)
 	    z->buf += n;
 	}
 
-	return n;
-	
+	return (zip_int64_t)n;
+
     case ZIP_SOURCE_CLOSE:
 	return 0;
 
     case ZIP_SOURCE_STAT:
         {
 	    struct zip_stat *st;
-	    
+
 	    if (len < sizeof(*st))
 		return -1;
 
@@ -125,13 +123,13 @@ read_data(void *state, void *data, zip_uint64_t len, enum zip_source_cmd cmd)
 
 	    zip_stat_init(st);
 	    st->mtime = z->mtime;
-	    st->size = z->end - z->data;
+	    st->size = (zip_uint64_t)(z->end - z->data);
 	    st->comp_size = st->size;
 	    st->comp_method = ZIP_CM_STORE;
 	    st->encryption_method = ZIP_EM_NONE;
 	    st->valid = ZIP_STAT_MTIME|ZIP_STAT_SIZE|ZIP_STAT_COMP_SIZE
 		|ZIP_STAT_COMP_METHOD|ZIP_STAT_ENCRYPTION_METHOD;
-	    
+
 	    return sizeof(*st);
 	}
 

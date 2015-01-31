@@ -1,8 +1,8 @@
 /*
    +----------------------------------------------------------------------+
-   | PHP Version 5                                                        |
+   | PHP Version 7                                                        |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1997-2013 The PHP Group                                |
+   | Copyright (c) 1997-2015 The PHP Group                                |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -86,7 +86,7 @@ static void php_ns_config(php_ns_context *ctx, char global);
  */
 
 static int
-php_ns_sapi_ub_write(const char *str, uint str_length TSRMLS_DC)
+php_ns_sapi_ub_write(const char *str, uint str_length)
 {
 	int n;
 	uint sent = 0;
@@ -101,17 +101,17 @@ php_ns_sapi_ub_write(const char *str, uint str_length TSRMLS_DC)
 		sent += n;
 		str_length -= n;
 	}
-	
+
 	return sent;
 }
 
 /*
- * php_ns_sapi_header_handler() sets a HTTP reply header to be 
+ * php_ns_sapi_header_handler() sets a HTTP reply header to be
  * sent to the client.
  */
 
 static int
-php_ns_sapi_header_handler(sapi_header_struct *sapi_header, sapi_headers_struct *sapi_headers TSRMLS_DC)
+php_ns_sapi_header_handler(sapi_header_struct *sapi_header, sapi_headers_struct *sapi_headers)
 {
 	char *header_name, *header_content;
 	char *p;
@@ -135,7 +135,7 @@ php_ns_sapi_header_handler(sapi_header_struct *sapi_header, sapi_headers_struct 
 	}
 
 	sapi_free_header(sapi_header);
-	
+
 	return 0;
 }
 
@@ -145,14 +145,14 @@ php_ns_sapi_header_handler(sapi_header_struct *sapi_header, sapi_headers_struct 
  */
 
 static int
-php_ns_sapi_send_headers(sapi_headers_struct *sapi_headers TSRMLS_DC)
+php_ns_sapi_send_headers(sapi_headers_struct *sapi_headers)
 {
 	if(SG(sapi_headers).send_default_content_type) {
 		Ns_ConnSetRequiredHeaders(NSG(conn), "text/html", 0);
 	}
-	
+
 	Ns_ConnFlushHeaders(NSG(conn), SG(sapi_headers).http_response_code);
-	
+
 	return SAPI_HEADER_SENT_SUCCESSFULLY;
 }
 
@@ -162,15 +162,15 @@ php_ns_sapi_send_headers(sapi_headers_struct *sapi_headers TSRMLS_DC)
  */
 
 static int
-php_ns_sapi_read_post(char *buf, uint count_bytes TSRMLS_DC)
+php_ns_sapi_read_post(char *buf, uint count_bytes)
 {
 	uint max_read;
 	uint total_read = 0;
 
 	max_read = MIN(NSG(data_avail), count_bytes);
-	
+
 	total_read = Ns_ConnRead(NSG(conn), buf, max_read);
-	
+
 	if(total_read == NS_ERROR) {
 		total_read = -1;
 	} else {
@@ -180,16 +180,16 @@ php_ns_sapi_read_post(char *buf, uint count_bytes TSRMLS_DC)
 	return total_read;
 }
 
-/* 
+/*
  * php_ns_sapi_read_cookies() returns the Cookie header from
  * the HTTP request header
  */
-	
-static char *php_ns_sapi_read_cookies(TSRMLS_D)
+
+static char *php_ns_sapi_read_cookies(void)
 {
 	int i;
 	char *http_cookie = NULL;
-	
+
 	i = Ns_SetIFind(NSG(conn->headers), "cookie");
 	if(i != -1) {
 		http_cookie = Ns_SetValue(NSG(conn->headers), i);
@@ -203,7 +203,7 @@ static void php_info_aolserver(ZEND_MODULE_INFO_FUNC_ARGS)
 	char buf[512];
 	int uptime = Ns_InfoUptime();
 	int i;
-	
+
 	php_info_print_table_start();
 	php_info_print_table_row(2, "SAPI module version", "$Id$");
 	php_info_print_table_row(2, "Build date", Ns_InfoBuildDate());
@@ -215,7 +215,7 @@ static void php_info_aolserver(ZEND_MODULE_INFO_FUNC_ARGS)
 	php_info_print_table_row(2, "Server platform", Ns_InfoPlatform());
 	snprintf(buf, 511, "%s/%s", Ns_InfoServerName(), Ns_InfoServerVersion());
 	php_info_print_table_row(2, "Server version", buf);
-	snprintf(buf, 511, "%d day(s), %02d:%02d:%02d", 
+	snprintf(buf, 511, "%d day(s), %02d:%02d:%02d",
 			uptime / 86400,
 			(uptime / 3600) % 24,
 			(uptime / 60) % 60,
@@ -268,12 +268,12 @@ PHP_FUNCTION(getallheaders)
 	int i;
 
 	array_init(return_value);
-	
+
 	for (i = 0; i < Ns_SetSize(NSG(conn->headers)); i++) {
 		char *key = Ns_SetKey(NSG(conn->headers), i);
 		char *value = Ns_SetValue(NSG(conn->headers), i);
-		
-		add_assoc_string(return_value, key, value, 1);
+
+		add_assoc_string(return_value, key, value);
 	}
 }
 
@@ -295,13 +295,13 @@ php_ns_startup(sapi_module_struct *sapi_module)
  */
 
 #define ADD_STRINGX(name, buf)										\
-	php_register_variable(name, buf, track_vars_array TSRMLS_CC)
+	php_register_variable(name, buf, track_vars_array)
 
 #define ADD_STRING(name)										\
 	ADD_STRINGX(name, buf)
 
 static void
-php_ns_sapi_register_variables(zval *track_vars_array TSRMLS_DC)
+php_ns_sapi_register_variables(zval *track_vars_array)
 {
 	int i;
 	char buf[NS_BUF_SIZE + 1];
@@ -314,7 +314,7 @@ php_ns_sapi_register_variables(zval *track_vars_array TSRMLS_DC)
 		char c;
 
 		snprintf(buf, NS_BUF_SIZE, "HTTP_%s", key);
-		
+
 		for(p = buf + 5; (c = *p); p++) {
 			c = toupper(c);
 			if(c < 'A' || c > 'Z') {
@@ -325,7 +325,7 @@ php_ns_sapi_register_variables(zval *track_vars_array TSRMLS_DC)
 
 		ADD_STRINGX(buf, value);
 	}
-	
+
 	snprintf(buf, NS_BUF_SIZE, "%s/%s", Ns_InfoServerName(), Ns_InfoServerVersion());
 	ADD_STRING("SERVER_SOFTWARE");
 	snprintf(buf, NS_BUF_SIZE, "HTTP/%1.1f", NSG(conn)->request->version);
@@ -335,7 +335,7 @@ php_ns_sapi_register_variables(zval *track_vars_array TSRMLS_DC)
 
 	if(NSG(conn)->request->query)
 		ADD_STRINGX("QUERY_STRING", NSG(conn)->request->query);
-	
+
 	ADD_STRINGX("SERVER_BUILDDATE", Ns_InfoBuildDate());
 
 	ADD_STRINGX("REMOTE_ADDR", Ns_ConnPeer(NSG(conn)));
@@ -402,7 +402,7 @@ static sapi_module_struct aolserver_sapi_module = {
  */
 
 static int
-php_ns_module_main(TSRMLS_D)
+php_ns_module_main(void)
 {
 	zend_file_handle file_handle;
 
@@ -410,13 +410,13 @@ php_ns_module_main(TSRMLS_D)
 	file_handle.filename = SG(request_info).path_translated;
 	file_handle.free_filename = 0;
 	file_handle.opened_path = NULL;
-	
+
 	php_ns_config(global_context, 0);
-	if (php_request_startup(TSRMLS_C) == FAILURE) {
+	if (php_request_startup() == FAILURE) {
 		return NS_ERROR;
 	}
-	
-	php_execute_script(&file_handle TSRMLS_CC);
+
+	php_execute_script(&file_handle);
 	php_request_shutdown(NULL);
 
 	return NS_OK;
@@ -427,23 +427,23 @@ php_ns_module_main(TSRMLS_D)
  * and fills it with data provided by the web server
  */
 
-static void 
-php_ns_request_ctor(TSRMLS_D)
+static void
+php_ns_request_ctor(void)
 {
 	char *server;
 	Ns_DString ds;
 	char *root;
 	int index;
 	char *tmp;
-	
+
 	server = Ns_ConnServer(NSG(conn));
-	
+
 #define safe_strdup(x) ((x)?strdup((x)):NULL)
 	SG(request_info).query_string = safe_strdup(NSG(conn->request->query));
 
 	Ns_DStringInit(&ds);
 	Ns_UrlToFile(&ds, server, NSG(conn->request->url));
-	
+
 	/* path_translated is the absolute path to the file */
 	SG(request_info).path_translated = safe_strdup(Ns_DStringValue(&ds));
 	Ns_DStringFree(&ds);
@@ -454,7 +454,7 @@ php_ns_request_ctor(TSRMLS_D)
 	else SG(request_info).proto_num = 1000;
 	SG(request_info).content_length = Ns_ConnContentLength(NSG(conn));
 	index = Ns_SetIFind(NSG(conn)->headers, "content-type");
-	SG(request_info).content_type = index == -1 ? NULL : 
+	SG(request_info).content_type = index == -1 ? NULL :
 		Ns_SetValue(NSG(conn)->headers, index);
 	SG(sapi_headers).http_response_code = 200;
 
@@ -473,11 +473,11 @@ php_ns_request_ctor(TSRMLS_D)
 
 /*
  * php_ns_request_dtor() destroys all data associated with
- * the per-request structure 
+ * the per-request structure
  */
 
 static void
-php_ns_request_dtor(TSRMLS_D)
+php_ns_request_dtor(void)
 {
 	free(SG(request_info).path_translated);
 	if (SG(request_info).query_string)
@@ -494,17 +494,16 @@ static int
 php_ns_request_handler(void *context, Ns_Conn *conn)
 {
 	int status = NS_OK;
-	TSRMLS_FETCH();
-	
+
 	NSG(conn) = conn;
-	
+
 	SG(server_context) = global_context;
 
-	php_ns_request_ctor(TSRMLS_C);
-	
-	status = php_ns_module_main(TSRMLS_C);
-	
-	php_ns_request_dtor(TSRMLS_C);
+	php_ns_request_ctor();
+
+	status = php_ns_module_main();
+
+	php_ns_request_dtor();
 
 	return status;
 }
@@ -515,7 +514,7 @@ php_ns_request_handler(void *context, Ns_Conn *conn)
  * It understands the "map" and "php_value" command.
  */
 
-static void 
+static void
 php_ns_config(php_ns_context *ctx, char global)
 {
 	int i;
@@ -535,10 +534,10 @@ php_ns_config(php_ns_context *ctx, char global)
 			Ns_RegisterRequest(ctx->ns_server, "POST", value, php_ns_request_handler, NULL, ctx, 0);
 			Ns_RegisterRequest(ctx->ns_server, "HEAD", value, php_ns_request_handler, NULL, ctx, 0);
 
-	/* 
-	 * Deactivated for now. The ini system will cause random crashes when 
-	 * accessed from here (since there are no locks to protect the global 
-	 * known_directives) 
+	/*
+	 * Deactivated for now. The ini system will cause random crashes when
+	 * accessed from here (since there are no locks to protect the global
+	 * known_directives)
 	 */
 
 		} else if (!global && !strcasecmp(key, "php_value")) {
@@ -549,25 +548,25 @@ php_ns_config(php_ns_context *ctx, char global)
 			val = strchr(value, ' ');
 			if (val) {
 				char *new_key;
-				
+
 				new_key = estrndup(value, val - value);
-				
-				do { 
-					val++; 
+
+				do {
+					val++;
 				} while(*val == ' ');
 
 				Ns_Log(Debug, "PHP configuration option '%s=%s'", new_key, val);
-				zend_alter_ini_entry(new_key, strlen(new_key) + 1, val, 
+				zend_alter_ini_entry(new_key, strlen(new_key) + 1, val,
 						strlen(val) + 1, PHP_INI_SYSTEM, PHP_INI_STAGE_ACTIVATE);
-				
+
 				efree(new_key);
 			}
 #endif
 		}
-		
+
 	}
 }
-	
+
 /*
  * php_ns_server_shutdown() performs the last steps before the
  * server exits. Shutdowns basic services and frees memory
@@ -577,7 +576,7 @@ static void
 php_ns_server_shutdown(void *context)
 {
 	php_ns_context *ctx = (php_ns_context *) context;
-	
+
 	ctx->sapi_module->shutdown(ctx->sapi_module);
 	sapi_shutdown();
 	tsrm_shutdown();
@@ -597,20 +596,20 @@ php_ns_server_shutdown(void *context)
 int Ns_ModuleInit(char *server, char *module)
 {
 	php_ns_context *ctx;
-	
+
 	tsrm_startup(1, 1, 0, NULL);
 	sapi_startup(&aolserver_sapi_module);
 	sapi_module.startup(&aolserver_sapi_module);
-	
+
 	/* TSRM is used to allocate a per-thread structure */
 	ts_allocate_id(&ns_globals_id, sizeof(ns_globals_struct), NULL, NULL);
-	
+
 	/* the context contains data valid for all threads */
 	ctx = malloc(sizeof *ctx);
 	ctx->sapi_module = &aolserver_sapi_module;
 	ctx->ns_server = strdup(server);
 	ctx->ns_module = strdup(module);
-	
+
 	/* read the configuration */
 	php_ns_config(ctx, 1);
 

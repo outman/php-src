@@ -1,8 +1,6 @@
 /*
-  $NiH: zip_unchange_data.c,v 1.14 2004/11/30 23:02:47 wiz Exp $
-
   zip_unchange_data.c -- undo helper function
-  Copyright (C) 1999, 2004 Dieter Baron and Thomas Klausner
+  Copyright (C) 1999-2012 Dieter Baron and Thomas Klausner
 
   This file is part of libzip, a library to manipulate ZIP archives.
   The authors can be contacted at <libzip@nih.at>
@@ -19,7 +17,7 @@
   3. The names of the authors may not be used to endorse or promote
      products derived from this software without specific prior
      written permission.
- 
+
   THIS SOFTWARE IS PROVIDED BY THE AUTHORS ``AS IS'' AND ANY EXPRESS
   OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
   WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -33,9 +31,7 @@
   IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-
 
-#include <stdlib.h>
 
 #include "zipint.h"
 
@@ -46,7 +42,15 @@ _zip_unchange_data(struct zip_entry *ze)
 	zip_source_free(ze->source);
 	ze->source = NULL;
     }
-    
-    ze->state = ze->ch_filename ? ZIP_ST_RENAMED : ZIP_ST_UNCHANGED;
+
+    if (ze->changes != NULL && (ze->changes->changed & ZIP_DIRENT_COMP_METHOD) && ze->changes->comp_method == ZIP_CM_REPLACED_DEFAULT) {
+	ze->changes->changed &= ~ZIP_DIRENT_COMP_METHOD;
+	if (ze->changes->changed == 0) {
+	    _zip_dirent_free(ze->changes);
+	    ze->changes = NULL;
+	}
+    }
+
+    ze->deleted = 0;
 }
 

@@ -17,7 +17,7 @@
   3. The names of the authors may not be used to endorse or promote
      products derived from this software without specific prior
      written permission.
- 
+
   THIS SOFTWARE IS PROVIDED BY THE AUTHORS ``AS IS'' AND ANY EXPRESS
   OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
   WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -31,26 +31,25 @@
   IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-
+
 
 #include "zipint.h"
 
-
 
-ZIP_EXTERN(int)
-zip_stat_index(struct zip *za, zip_uint64_t index, int flags,
+
+ZIP_EXTERN int
+zip_stat_index(struct zip *za, zip_uint64_t index, zip_flags_t flags,
 	       struct zip_stat *st)
 {
     const char *name;
-    
-    if (index >= za->nentry) {
-	_zip_error_set(&za->error, ZIP_ER_INVAL, 0);
+    struct zip_dirent *de;
+
+    if ((de=_zip_get_dirent(za, index, flags, NULL)) == NULL)
 	return -1;
-    }
 
     if ((name=zip_get_name(za, index, flags)) == NULL)
 	return -1;
-    
+
 
     if ((flags & ZIP_FL_UNCHANGED) == 0
 	&& ZIP_ENTRY_DATA_CHANGED(za->entry+index)) {
@@ -60,21 +59,16 @@ zip_stat_index(struct zip *za, zip_uint64_t index, int flags,
 	}
     }
     else {
-	if (za->cdir == NULL || index >= za->cdir->nentry) {
-	    _zip_error_set(&za->error, ZIP_ER_INVAL, 0);
-	    return -1;
-	}
-
 	zip_stat_init(st);
 
-	st->crc = za->cdir->entry[index].crc;
-	st->size = za->cdir->entry[index].uncomp_size;
-	st->mtime = za->cdir->entry[index].last_mod;
-	st->comp_size = za->cdir->entry[index].comp_size;
-	st->comp_method = za->cdir->entry[index].comp_method;
-	if (za->cdir->entry[index].bitflags & ZIP_GPBF_ENCRYPTED) {
-	    if (za->cdir->entry[index].bitflags & ZIP_GPBF_STRONG_ENCRYPTION) {
-		/* XXX */
+	st->crc = de->crc;
+	st->size = de->uncomp_size;
+	st->mtime = de->last_mod;
+	st->comp_size = de->comp_size;
+	st->comp_method = (zip_uint16_t)de->comp_method;
+	if (de->bitflags & ZIP_GPBF_ENCRYPTED) {
+	    if (de->bitflags & ZIP_GPBF_STRONG_ENCRYPTION) {
+		/* TODO */
 		st->encryption_method = ZIP_EM_UNKNOWN;
 	    }
 	    else
@@ -89,6 +83,6 @@ zip_stat_index(struct zip *za, zip_uint64_t index, int flags,
     st->index = index;
     st->name = name;
     st->valid |= ZIP_STAT_INDEX|ZIP_STAT_NAME;
-    
+
     return 0;
 }

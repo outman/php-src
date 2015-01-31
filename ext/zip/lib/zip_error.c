@@ -1,6 +1,6 @@
 /*
   zip_error.c -- struct zip_error helper functions
-  Copyright (C) 1999-2009 Dieter Baron and Thomas Klausner
+  Copyright (C) 1999-2015 Dieter Baron and Thomas Klausner
 
   This file is part of libzip, a library to manipulate ZIP archives.
   The authors can be contacted at <libzip@nih.at>
@@ -17,7 +17,7 @@
   3. The names of the authors may not be used to endorse or promote
      products derived from this software without specific prior
      written permission.
- 
+
   THIS SOFTWARE IS PROVIDED BY THE AUTHORS ``AS IS'' AND ANY EXPRESS
   OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
   WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -31,31 +31,34 @@
   IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-
+
 
 #include <stdlib.h>
 
 #include "zipint.h"
 
-
+
 
 void
 _zip_error_clear(struct zip_error *err)
 {
+    if (err == NULL)
+	return;
+
     err->zip_err = ZIP_ER_OK;
     err->sys_err = 0;
 }
 
-
+
 
 void
-_zip_error_copy(struct zip_error *dst, struct zip_error *src)
+_zip_error_copy(struct zip_error *dst, const struct zip_error *src)
 {
     dst->zip_err = src->zip_err;
     dst->sys_err = src->sys_err;
 }
 
-
+
 
 void
 _zip_error_fini(struct zip_error *err)
@@ -64,10 +67,10 @@ _zip_error_fini(struct zip_error *err)
     err->str = NULL;
 }
 
-
+
 
 void
-_zip_error_get(struct zip_error *err, int *zep, int *sep)
+_zip_error_get(const struct zip_error *err, int *zep, int *sep)
 {
     if (zep)
 	*zep = err->zip_err;
@@ -79,7 +82,7 @@ _zip_error_get(struct zip_error *err, int *zep, int *sep)
     }
 }
 
-
+
 
 void
 _zip_error_init(struct zip_error *err)
@@ -89,7 +92,7 @@ _zip_error_init(struct zip_error *err)
     err->str = NULL;
 }
 
-
+
 
 void
 _zip_error_set(struct zip_error *err, int ze, int se)
@@ -100,13 +103,13 @@ _zip_error_set(struct zip_error *err, int ze, int se)
     }
 }
 
-
+
 
 void
 _zip_error_set_from_source(struct zip_error *err, struct zip_source *src)
 {
     int ze, se;
-    
+
     zip_source_error(src, &ze, &se);
     _zip_error_set(err, ze, se);
 }

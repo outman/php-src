@@ -1,9 +1,8 @@
-
 /*
    +----------------------------------------------------------------------+
-   | PHP Version 5                                                        |
+   | PHP Version 7                                                        |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1997-2013 The PHP Group                                |
+   | Copyright (c) 1997-2015 The PHP Group                                |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -17,25 +16,24 @@
    +----------------------------------------------------------------------+
 */
 
-
 /*
-Copyright (c) 2007, Lite Speed Technologies Inc.
+Copyright (c) 2002-2015, Lite Speed Technologies Inc.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
-met: 
+met:
 
     * Redistributions of source code must retain the above copyright
-      notice, this list of conditions and the following disclaimer. 
+      notice, this list of conditions and the following disclaimer.
     * Redistributions in binary form must reproduce the above
       copyright notice, this list of conditions and the following
       disclaimer in the documentation and/or other materials provided
-      with the distribution. 
+      with the distribution.
     * Neither the name of the Lite Speed Technologies Inc nor the
       names of its contributors may be used to endorse or promote
       products derived from this software without specific prior
-      written permission.  
+      written permission.
 
 THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
 "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
@@ -47,7 +45,7 @@ LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
 DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
 THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE. 
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
 
@@ -96,7 +94,7 @@ enum
 
 /* Values for m_flag in lsapi_packet_header */
 #define LSAPI_ENDIAN_LITTLE         0
-#define LSAPI_ENDIAN_BIG            1 
+#define LSAPI_ENDIAN_BIG            1
 #define LSAPI_ENDIAN_BIT            1
 
 #if defined(__i386__)||defined( __x86_64 )||defined( __x86_64__ )
@@ -113,12 +111,14 @@ enum
 #define LSAPI_RESP_END              5
 #define LSAPI_STDERR_STREAM         6
 #define LSAPI_REQ_RECEIVED          7
+#define LSAPI_CONN_CLOSE            8
+#define LSAPI_INTERNAL_ERROR        9
 
 
 #define LSAPI_MAX_HEADER_LEN        65535
 #define LSAPI_MAX_DATA_PACKET_LEN   16384
 
-#define LSAPI_RESP_HTTP_HEADER_MAX  4096
+#define LSAPI_RESP_HTTP_HEADER_MAX  32768
 #define LSAPI_PACKET_HEADER_LEN     8
 
 
@@ -137,7 +137,7 @@ struct lsapi_packet_header
 
 /*
     LSAPI request header packet
-    
+
     1. struct lsapi_req_header
     2. struct lsapi_http_header_index
     3. lsapi_header_offset * unknownHeaders
@@ -148,7 +148,7 @@ struct lsapi_packet_header
 struct lsapi_req_header
 {
     struct lsapi_packet_header m_pktHeader;
-        
+
     int32_t m_httpHeaderLen;
     int32_t m_reqBodyLen;
     int32_t m_scriptFileOff;   /* path to the script file. */
@@ -162,11 +162,11 @@ struct lsapi_req_header
 
 
 struct lsapi_http_header_index
-{        
+{
     int16_t m_headerLen[H_TRANSFER_ENCODING+1];
     int32_t m_headerOff[H_TRANSFER_ENCODING+1];
-} ;  
- 
+} ;
+
 struct lsapi_header_offset
 {
     int32_t nameOff;

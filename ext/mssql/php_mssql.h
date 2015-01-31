@@ -1,8 +1,8 @@
-/* 
+/*
    +----------------------------------------------------------------------+
-   | PHP Version 5                                                        |
+   | PHP Version 7                                                        |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1997-2013 The PHP Group                                |
+   | Copyright (c) 1997-2015 The PHP Group                                |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -148,7 +148,7 @@ typedef struct mssql_statement {
 } mssql_statement;
 
 typedef struct {
-	
+
 	zval *zval;
 	/* TODO: more data for special types (BLOBS, NUMERIC...) */
 } mssql_bind;
@@ -166,8 +166,8 @@ ZEND_BEGIN_MODULE_GLOBALS(mssql)
 	long min_error_severity, min_message_severity;
 	long cfg_min_error_severity, cfg_min_message_severity;
 	long connect_timeout, timeout;
-	zend_bool compatability_mode;
-	void (*get_column_content)(mssql_link *mssql_ptr,int offset,zval *result,int column_type  TSRMLS_DC);
+	zend_bool compatibility_mode;
+	void (*get_column_content)(mssql_link *mssql_ptr,int offset,zval *result,int column_type );
 	long textsize, textlimit, batchsize;
 	zend_bool datetimeconvert;
 	HashTable *resource_list, *resource_plist;
@@ -179,7 +179,7 @@ ZEND_END_MODULE_GLOBALS(mssql)
 
 typedef struct mssql_field {
 	char *name,*column_source;
-	long max_length; 
+	long max_length;
 	int numeric;
 	int type;
 } mssql_field;

@@ -2,7 +2,7 @@
  * Copyright (c) Ian F. Darwin 1986-1995.
  * Software written by Ian F. Darwin and others;
  * maintained 1995-present by Christos Zoulas and others.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
  * are met:
@@ -12,7 +12,7 @@
  * 2. Redistributions in binary form must reproduce the above copyright
  *    notice, this list of conditions and the following disclaimer in the
  *    documentation and/or other materials provided with the distribution.
- *  
+ *
  * THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
  * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -32,9 +32,10 @@
 #include "php.h"
 
 #include "file.h"
+#include "cdf.h"
 
 #ifndef lint
-FILE_RCSID("@(#)$File: print.c,v 1.71 2011/09/20 15:28:09 christos Exp $")
+FILE_RCSID("@(#)$File: print.c,v 1.76 2013/02/26 18:25:00 christos Exp $")
 #endif  /* lint */
 
 #include <stdio.h>
@@ -46,6 +47,11 @@ FILE_RCSID("@(#)$File: print.c,v 1.71 2011/09/20 15:28:09 christos Exp $")
 #endif
 #include <time.h>
 
+#ifdef PHP_WIN32
+# define asctime_r php_asctime_r
+# define ctime_r php_ctime_r
+#endif
+
 #define SZOF(a)	(sizeof(a) / sizeof(a[0]))
 
 /*VARARGS*/
@@ -53,27 +59,35 @@ protected void
 file_magwarn(struct magic_set *ms, const char *f, ...)
 {
 	va_list va;
-	char *expanded_format;
-	TSRMLS_FETCH();
+	char *expanded_format = NULL;
+	int expanded_len;
 
 	va_start(va, f);
-	vasprintf(&expanded_format, f, va);
+	expanded_len = vasprintf(&expanded_format, f, va);
 	va_end(va);
-	
-	php_error_docref(NULL TSRMLS_CC, E_NOTICE, "Warning: %s", expanded_format);
 
-	free(expanded_format);
+	if (expanded_len >= 0 && expanded_format) {
+		php_error_docref(NULL, E_NOTICE, "Warning: %s", expanded_format);
+
+		free(expanded_format);
+	}
 }
 
 protected const char *
-file_fmttime(uint32_t v, int local)
+file_fmttime(uint64_t v, int flags, char *buf)
 {
 	char *pp;
 	time_t t = (time_t)v;
 	struct tm *tm;
 
-	if (local) {
-		pp = ctime(&t);
+	if (flags & FILE_T_WINDOWS) {
+		struct timeval ts;
+		cdf_timestamp_to_timespec(&ts, t);
+		t = ts.tv_sec;
+	}
+
+	if (flags & FILE_T_LOCAL) {
+		pp = ctime_r(&t, buf);
 	} else {
 #ifndef HAVE_DAYLIGHT
 		private int daylight = 0;
@@ -95,7 +109,7 @@ file_fmttime(uint32_t v, int local)
 		tm = gmtime(&t);
 		if (tm == NULL)
 			goto out;
-		pp = asctime(tm);
+		pp = asctime_r(tm, buf);
 	}
 
 	if (pp == NULL)
@@ -103,5 +117,5 @@ file_fmttime(uint32_t v, int local)
 	pp[strcspn(pp, "\n")] = '\0';
 	return pp;
 out:
-	return "*Invalid time*";
+	return strcpy(buf, "*Invalid time*");
 }

@@ -1,6 +1,6 @@
 /*
   zip_source_open.c -- open zip_source (prepare for reading)
-  Copyright (C) 2009 Dieter Baron and Thomas Klausner
+  Copyright (C) 2009-2015 Dieter Baron and Thomas Klausner
 
   This file is part of libzip, a library to manipulate ZIP archives.
   The authors can be contacted at <libzip@nih.at>
@@ -17,7 +17,7 @@
   3. The names of the authors may not be used to endorse or promote
      products derived from this software without specific prior
      written permission.
- 
+
   THIS SOFTWARE IS PROVIDED BY THE AUTHORS ``AS IS'' AND ANY EXPRESS
   OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
   WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -31,13 +31,13 @@
   IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-
+
 
 #include "zipint.h"
 
-
 
-ZIP_EXTERN(int)
+
+int
 zip_source_open(struct zip_source *src)
 {
     zip_int64_t ret;
@@ -58,10 +58,10 @@ zip_source_open(struct zip_source *src)
 	}
 
 	ret = src->cb.l(src->src, src->ud, NULL, 0, ZIP_SOURCE_OPEN);
-	
+
 	if (ret < 0) {
-	    (void)zip_source_close(src->src);
-	    
+	    zip_source_close(src->src);
+
 	    if (ret == ZIP_SOURCE_ERR_LOWER)
 		src->error_source = ZIP_LES_LOWER;
 	    else
@@ -71,6 +71,6 @@ zip_source_open(struct zip_source *src)
     }
 
     src->is_open = 1;
-    
+
     return 0;
 }

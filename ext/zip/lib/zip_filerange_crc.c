@@ -1,6 +1,6 @@
 /*
   zip_filerange_crc.c -- compute CRC32 for a range of a file
-  Copyright (C) 2008 Dieter Baron and Thomas Klausner
+  Copyright (C) 2008-2015 Dieter Baron and Thomas Klausner
 
   This file is part of libzip, a library to manipulate ZIP archives.
   The authors can be contacted at <libzip@nih.at>
@@ -17,7 +17,7 @@
   3. The names of the authors may not be used to endorse or promote
      products derived from this software without specific prior
      written permission.
- 
+
   THIS SOFTWARE IS PROVIDED BY THE AUTHORS ``AS IS'' AND ANY EXPRESS
   OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
   WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -31,7 +31,7 @@
   IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-
+
 
 #include <stdio.h>
 #include <errno.h>
@@ -39,7 +39,7 @@
 #include "zipint.h"
 
 
-
+
 
 int
 _zip_filerange_crc(FILE *fp, off_t start, off_t len, uLong *crcp,
@@ -54,15 +54,15 @@ _zip_filerange_crc(FILE *fp, off_t start, off_t len, uLong *crcp,
 	_zip_error_set(errp, ZIP_ER_SEEK, errno);
 	return -1;
     }
-    
+
     while (len > 0) {
-	n = len > BUFSIZE ? BUFSIZE : len;
-	if ((n=fread(buf, 1, n, fp)) <= 0) {
+	n = len > BUFSIZE ? BUFSIZE : (size_t)len;
+	if ((n=fread(buf, 1, n, fp)) == 0) {
 	    _zip_error_set(errp, ZIP_ER_READ, errno);
 	    return -1;
 	}
 
-	*crcp = crc32(*crcp, buf, n);
+	*crcp = crc32(*crcp, buf, (uInt)n);
 
 	len-= n;
     }
