@@ -329,7 +329,7 @@ static zend_object *reflection_objects_new(zend_class_entry *class_type) /* {{{ 
 {
 	reflection_object *intern;
 
-	intern = ecalloc(1, sizeof(reflection_object) + sizeof(zval) * (class_type->default_properties_count - 1));
+	intern = ecalloc(1, sizeof(reflection_object) + zend_object_properties_size(class_type));
 	intern->zo.ce = class_type;
 
 	zend_object_std_init(&intern->zo, class_type);
@@ -3996,6 +3996,7 @@ static int _adddynproperty(zval *ptr, int num_args, va_list args, zend_hash_key 
 	if (zend_get_property_info(ce, hash_key->key, 1) == NULL) {
 		zend_property_info property_info;
 
+		property_info.doc_comment = NULL;
 		property_info.flags = ZEND_ACC_IMPLICIT_PUBLIC;
 		property_info.name = hash_key->key;
 		property_info.ce = ce;
@@ -4216,7 +4217,7 @@ ZEND_METHOD(reflection_class, getModifiers)
 	}
 	GET_REFLECTION_OBJECT_PTR(ce);
 
-	RETURN_LONG(ce->ce_flags & ~ZEND_ACC_CONSTANTS_UPDATED);
+	RETURN_LONG(ce->ce_flags & ~(ZEND_ACC_CONSTANTS_UPDATED|ZEND_ACC_USE_GUARDS));
 }
 /* }}} */
 

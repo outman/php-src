@@ -601,6 +601,10 @@ static int ZEND_FASTCALL  ZEND_DO_FCALL_SPEC_HANDLER(ZEND_OPCODE_HANDLER_ARGS)
 		zend_vm_stack_free_args(call);
 		zend_vm_stack_free_call_frame(call);
 
+		ZEND_ASSERT(
+			!(fbc->common.fn_flags & ZEND_ACC_HAS_RETURN_TYPE) ||
+			zend_verify_internal_return_type(fbc, EX_VAR(opline->result.var)));
+
 		if (!RETURN_VALUE_USED(opline)) {
 			zval_ptr_dtor(EX_VAR(opline->result.var));
 		}
@@ -6096,8 +6100,9 @@ static int ZEND_FASTCALL  ZEND_INIT_STATIC_METHOD_CALL_SPEC_CONST_UNUSED_HANDLER
 
 static int ZEND_FASTCALL  ZEND_VERIFY_RETURN_TYPE_SPEC_CONST_UNUSED_HANDLER(ZEND_OPCODE_HANDLER_ARGS)
 {
+#if IS_CONST != IS_UNUSED
 	USE_OPLINE
-
+#endif
 	SAVE_OPLINE();
 	if (IS_CONST == IS_UNUSED) {
 		zend_verify_missing_return_type(EX(func));
@@ -10113,8 +10118,9 @@ static int ZEND_FASTCALL  ZEND_FETCH_DIM_FUNC_ARG_SPEC_TMP_UNUSED_HANDLER(ZEND_O
 
 static int ZEND_FASTCALL  ZEND_VERIFY_RETURN_TYPE_SPEC_TMP_UNUSED_HANDLER(ZEND_OPCODE_HANDLER_ARGS)
 {
+#if IS_TMP_VAR != IS_UNUSED
 	USE_OPLINE
-
+#endif
 	SAVE_OPLINE();
 	if (IS_TMP_VAR == IS_UNUSED) {
 		zend_verify_missing_return_type(EX(func));
@@ -14953,8 +14959,9 @@ static int ZEND_FASTCALL  ZEND_INIT_STATIC_METHOD_CALL_SPEC_VAR_UNUSED_HANDLER(Z
 
 static int ZEND_FASTCALL  ZEND_VERIFY_RETURN_TYPE_SPEC_VAR_UNUSED_HANDLER(ZEND_OPCODE_HANDLER_ARGS)
 {
+#if IS_VAR != IS_UNUSED
 	USE_OPLINE
-
+#endif
 	SAVE_OPLINE();
 	if (IS_VAR == IS_UNUSED) {
 		zend_verify_missing_return_type(EX(func));
@@ -20215,8 +20222,9 @@ static int ZEND_FASTCALL  ZEND_ASSIGN_BW_XOR_SPEC_UNUSED_UNUSED_HANDLER(ZEND_OPC
 
 static int ZEND_FASTCALL  ZEND_VERIFY_RETURN_TYPE_SPEC_UNUSED_UNUSED_HANDLER(ZEND_OPCODE_HANDLER_ARGS)
 {
+#if IS_UNUSED != IS_UNUSED
 	USE_OPLINE
-
+#endif
 	SAVE_OPLINE();
 	if (IS_UNUSED == IS_UNUSED) {
 		zend_verify_missing_return_type(EX(func));
@@ -28398,8 +28406,9 @@ try_assign_dim_array:
 
 static int ZEND_FASTCALL  ZEND_VERIFY_RETURN_TYPE_SPEC_CV_UNUSED_HANDLER(ZEND_OPCODE_HANDLER_ARGS)
 {
+#if IS_CV != IS_UNUSED
 	USE_OPLINE
-
+#endif
 	SAVE_OPLINE();
 	if (IS_CV == IS_UNUSED) {
 		zend_verify_missing_return_type(EX(func));

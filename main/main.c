@@ -423,8 +423,6 @@ static PHP_INI_MH(OnUpdateInternalEncoding)
 {
 	if (new_value) {
 		OnUpdateString(entry, new_value, mh_arg1, mh_arg2, mh_arg3, stage);
-	} else {
-		PG(internal_encoding) = SG(default_charset);
 	}
 	return SUCCESS;
 }
@@ -436,8 +434,6 @@ static PHP_INI_MH(OnUpdateInputEncoding)
 {
 	if (new_value) {
 		OnUpdateString(entry, new_value, mh_arg1, mh_arg2, mh_arg3, stage);
-	} else {
-		PG(input_encoding) = SG(default_charset);
 	}
 	return SUCCESS;
 }
@@ -449,8 +445,6 @@ static PHP_INI_MH(OnUpdateOutputEncoding)
 {
 	if (new_value) {
 		OnUpdateString(entry, new_value, mh_arg1, mh_arg2, mh_arg3, stage);
-	} else {
-		PG(output_encoding) = SG(default_charset);
 	}
 	return SUCCESS;
 }
@@ -2255,6 +2249,7 @@ int php_module_startup(sapi_module_struct *sf, zend_module_entry *additional_mod
 
 	zuv.html_errors = 1;
 	zuv.import_use_extension = ".php";
+	zuv.import_use_extension_length = (uint)strlen(zuv.import_use_extension);
 	php_startup_auto_globals();
 	zend_set_utility_values(&zuv);
 	php_startup_sapi_content_types();
