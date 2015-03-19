@@ -65,7 +65,7 @@ static void _type_dtor(zval *zv)
 static void sapi_globals_ctor(sapi_globals_struct *sapi_globals)
 {
 #ifdef ZTS
-	ZEND_TSRMLS_CACHE_UPDATE;
+	ZEND_TSRMLS_CACHE_UPDATE();
 #endif
 	memset(sapi_globals, 0, sizeof(*sapi_globals));
 	zend_hash_init_ex(&sapi_globals->known_post_content_types, 8, NULL, _type_dtor, 1, 0);
@@ -83,10 +83,6 @@ SAPI_API sapi_module_struct sapi_module;
 
 SAPI_API void sapi_startup(sapi_module_struct *sf)
 {
-#ifdef ZEND_SIGNALS
-	zend_signal_startup();
-#endif
-
 	sf->ini_entries = NULL;
 	sapi_module = *sf;
 

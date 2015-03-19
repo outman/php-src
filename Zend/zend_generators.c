@@ -60,6 +60,12 @@ static void zend_generator_cleanup_unfinished_execution(zend_generator *generato
 				if (brk_opline->opcode == ZEND_FREE) {
 					zval *var = EX_VAR(brk_opline->op1.var);
 					zval_ptr_dtor_nogc(var);
+				} else if (brk_opline->opcode == ZEND_FE_FREE) {
+					zval *var = EX_VAR(brk_opline->op1.var);
+					if (Z_TYPE_P(var) != IS_ARRAY && Z_FE_ITER_P(var) != (uint32_t)-1) {
+						zend_hash_iterator_del(Z_FE_ITER_P(var));
+					}
+					zval_ptr_dtor_nogc(var);
 				}
 			}
 		}
@@ -180,6 +186,7 @@ static void zend_generator_free_storage(zend_object *object) /* {{{ */
 
 	zend_generator_close(generator, 0);
 
+	zval_ptr_dtor(&generator->retval);
 	zend_object_std_dtor(&generator->std);
 
 	if (generator->iterator) {
@@ -197,6 +204,8 @@ static zend_object *zend_generator_create(zend_class_entry *class_type) /* {{{ *
 
 	/* The key will be incremented on first use, so it'll start at 0 */
 	generator->largest_used_integer_key = -1;
+
+	ZVAL_UNDEF(&generator->retval);
 
 	zend_object_std_init(&generator->std, class_type);
 	generator->std.handlers = &zend_generator_handlers;
@@ -230,7 +239,9 @@ ZEND_API void zend_generator_create_zval(zend_execute_data *call, zend_op_array 
 		zend_op_array *op_array_copy = (zend_op_array*)emalloc(sizeof(zend_op_array));
 		*op_array_copy = *op_array;
 
-		(*op_array->refcount)++;
+		if (op_array->refcount) {
+			(*op_array->refcount)++;
+		}
 		op_array->run_time_cache = NULL;
 		if (op_array->static_variables) {
 			ALLOC_HASHTABLE(op_array_copy->static_variables);
@@ -278,7 +289,7 @@ ZEND_API void zend_generator_create_zval(zend_execute_data *call, zend_op_array 
 
 static zend_function *zend_generator_get_constructor(zend_object *object) /* {{{ */
 {
-	zend_error(E_RECOVERABLE_ERROR, "The \"Generator\" class is reserved for internal use and cannot be manually instantiated");
+	zend_error(E_EXCEPTION | E_ERROR, "The \"Generator\" class is reserved for internal use and cannot be manually instantiated");
 
 	return NULL;
 }
@@ -529,6 +540,34 @@ ZEND_METHOD(Generator, throw)
 }
 /* }}} */
 
+/* {{{ proto mixed Generator::getReturn()
+ * Retrieves the return value of the generator */
+ZEND_METHOD(Generator, getReturn)
+{
+	zend_generator *generator;
+
+	if (zend_parse_parameters_none() == FAILURE) {
+		return;
+	}
+
+	generator = (zend_generator *) Z_OBJ_P(getThis());
+
+	zend_generator_ensure_initialized(generator);
+	if (EG(exception)) {
+		return;
+	}
+
+	if (Z_ISUNDEF(generator->retval)) {
+		/* Generator hasn't returned yet -> error! */
+		zend_throw_exception(NULL,
+			"Cannot get return value of a generator that hasn't returned", 0);
+		return;
+	}
+
+	ZVAL_COPY(return_value, &generator->retval);
+}
+/* }}} */
+
 /* {{{ proto void Generator::__wakeup()
  * Throws an Exception as generators can't be serialized */
 ZEND_METHOD(Generator, __wakeup)
@@ -662,6 +701,7 @@ static const zend_function_entry generator_functions[] = {
 	ZEND_ME(Generator, next,     arginfo_generator_void, ZEND_ACC_PUBLIC)
 	ZEND_ME(Generator, send,     arginfo_generator_send, ZEND_ACC_PUBLIC)
 	ZEND_ME(Generator, throw,    arginfo_generator_throw, ZEND_ACC_PUBLIC)
+	ZEND_ME(Generator, getReturn,arginfo_generator_void, ZEND_ACC_PUBLIC)
 	ZEND_ME(Generator, __wakeup, arginfo_generator_void, ZEND_ACC_PUBLIC)
 	ZEND_FE_END
 };

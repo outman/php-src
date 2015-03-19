@@ -891,7 +891,7 @@ ZEND_API int zend_parse_method_parameters_ex(int flags, int num_args, zval *this
 /* }}} */
 
 /* Argument parsing API -- andrei */
-ZEND_API int _array_init(zval *arg, uint size ZEND_FILE_LINE_DC) /* {{{ */
+ZEND_API int _array_init(zval *arg, uint32_t size ZEND_FILE_LINE_DC) /* {{{ */
 {
 	ZVAL_NEW_ARR(arg);
 	_zend_hash_init(Z_ARRVAL_P(arg), size, ZVAL_PTR_DTOR, 0 ZEND_FILE_LINE_RELAY_CC);
@@ -1090,11 +1090,14 @@ ZEND_API void object_properties_load(zend_object *object, HashTable *properties)
  * calling zend_merge_properties(). */
 ZEND_API int _object_and_properties_init(zval *arg, zend_class_entry *class_type, HashTable *properties ZEND_FILE_LINE_DC) /* {{{ */
 {
-	if (class_type->ce_flags & (ZEND_ACC_INTERFACE|ZEND_ACC_IMPLICIT_ABSTRACT_CLASS|ZEND_ACC_EXPLICIT_ABSTRACT_CLASS)) {
-		char *what =   (class_type->ce_flags & ZEND_ACC_INTERFACE)                ? "interface"
-					 :((class_type->ce_flags & ZEND_ACC_TRAIT) == ZEND_ACC_TRAIT) ? "trait"
-					 :                                                              "abstract class";
-		zend_error(E_ERROR, "Cannot instantiate %s %s", what, class_type->name->val);
+	if (class_type->ce_flags & (ZEND_ACC_INTERFACE|ZEND_ACC_TRAIT|ZEND_ACC_IMPLICIT_ABSTRACT_CLASS|ZEND_ACC_EXPLICIT_ABSTRACT_CLASS)) {
+		if (class_type->ce_flags & ZEND_ACC_INTERFACE) {
+			zend_error_noreturn(E_ERROR, "Cannot instantiate interface %s", class_type->name->val);
+		} else if (class_type->ce_flags & ZEND_ACC_TRAIT) {
+			zend_error_noreturn(E_ERROR, "Cannot instantiate trait %s", class_type->name->val);
+		} else {
+			zend_error_noreturn(E_ERROR, "Cannot instantiate abstract class %s", class_type->name->val);
+		}
 	}
 
 	zend_update_class_constants(class_type);
@@ -1911,9 +1914,9 @@ ZEND_API void zend_check_magic_method_implementation(const zend_class_entry *ce,
 		!memcmp(lcname, ZEND_CALLSTATIC_FUNC_NAME, sizeof(ZEND_CALLSTATIC_FUNC_NAME)-1)
 	) {
 		if (fptr->common.num_args != 2) {
-			zend_error(error_type, "Method %s::%s() must take exactly 2 arguments", ce->name->val, ZEND_CALLSTATIC_FUNC_NAME);
+			zend_error(error_type, "Method %s::__callStatic() must take exactly 2 arguments", ce->name->val);
 		} else if (ARG_SHOULD_BE_SENT_BY_REF(fptr, 1) || ARG_SHOULD_BE_SENT_BY_REF(fptr, 2)) {
-			zend_error(error_type, "Method %s::%s() cannot take arguments by reference", ce->name->val, ZEND_CALLSTATIC_FUNC_NAME);
+			zend_error(error_type, "Method %s::__callStatic() cannot take arguments by reference", ce->name->val);
 		}
  	} else if (name_len == sizeof(ZEND_TOSTRING_FUNC_NAME) - 1 &&
  		!memcmp(lcname, ZEND_TOSTRING_FUNC_NAME, sizeof(ZEND_TOSTRING_FUNC_NAME)-1) && fptr->common.num_args != 0
@@ -2004,8 +2007,8 @@ ZEND_API int zend_register_functions(zend_class_entry *scope, const zend_functio
 			if (info->type_hint) {
 				if (info->class_name) {
 					ZEND_ASSERT(info->type_hint == IS_OBJECT);
-					if (!strcasecmp(info->class_name, "self") && !scope) {
-						zend_error(E_CORE_ERROR, "Cannot declare a return type of self outside of a class scope");
+					if (!scope && (!strcasecmp(info->class_name, "self") || !strcasecmp(info->class_name, "parent"))) {
+						zend_error(E_CORE_ERROR, "Cannot declare a return type of %s outside of a class scope", info->class_name);
 					}
 				}
 
@@ -3014,6 +3017,7 @@ ZEND_API zend_bool zend_is_callable_ex(zval *callable, zend_object *object, uint
 		return 0;
 	}
 
+again:
 	switch (Z_TYPE_P(callable)) {
 		case IS_STRING:
 			if (object) {
@@ -3157,7 +3161,6 @@ ZEND_API zend_bool zend_is_callable_ex(zval *callable, zend_object *object, uint
 				}
 			}
 			return 0;
-
 		case IS_OBJECT:
 			if (Z_OBJ_HANDLER_P(callable, get_closure) && Z_OBJ_HANDLER_P(callable, get_closure)(callable, &fcc->calling_scope, &fcc->function_handler, &fcc->object) == SUCCESS) {
 				fcc->called_scope = fcc->calling_scope;
@@ -3170,8 +3173,14 @@ ZEND_API zend_bool zend_is_callable_ex(zval *callable, zend_object *object, uint
 				}
 				return 1;
 			}
-			/* break missing intentionally */
-
+			if (callable_name) {
+				*callable_name = zval_get_string(callable);
+			}
+			if (error) zend_spprintf(error, 0, "no array or string given");
+			return 0;
+		case IS_REFERENCE:
+			callable = Z_REFVAL_P(callable);
+			goto again;
 		default:
 			if (callable_name) {
 				*callable_name = zval_get_string(callable);
@@ -3912,7 +3921,7 @@ ZEND_API zend_string *zend_resolve_method_name(zend_class_entry *ce, zend_functi
 	zend_string *name;
 
 	if (f->common.type != ZEND_USER_FUNCTION ||
-	    *(f->op_array.refcount) < 2 ||
+	    (f->op_array.refcount && *(f->op_array.refcount) < 2) ||
 	    !f->common.scope ||
 	    !f->common.scope->trait_aliases) {
 		return f->common.function_name;

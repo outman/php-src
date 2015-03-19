@@ -68,7 +68,7 @@ void zend_optimizer_pass1(zend_op_array *op_array, zend_optimizer_ctx *ctx)
 			if (ZEND_OP1_TYPE(opline) == IS_CONST &&
 				ZEND_OP2_TYPE(opline) == IS_CONST) {
 				/* binary operation with constant operands */
-				int (*binary_op)(zval *result, zval *op1, zval *op2) = get_binary_op(opline->opcode);
+				binary_op_type binary_op = get_binary_op(opline->opcode);
 				uint32_t tv = ZEND_RESULT(opline).var;		/* temporary variable */
 				zval result;
 				int er;
@@ -341,7 +341,7 @@ void zend_optimizer_pass1(zend_op_array *op_array, zend_optimizer_ctx *ctx)
 			}
 			break;
 
-		case ZEND_DO_FCALL: {
+		case ZEND_DO_ICALL: {
 			zend_op *send1_opline = opline - 1;
 			zend_op *send2_opline = NULL;
 			zend_op *init_opline = NULL;
@@ -602,11 +602,14 @@ void zend_optimizer_pass1(zend_op_array *op_array, zend_optimizer_ctx *ctx)
 		case ZEND_JMPNZ:
 		case ZEND_JMPZ_EX:
 		case ZEND_JMPNZ_EX:
-		case ZEND_FE_RESET:
-		case ZEND_FE_FETCH:
+		case ZEND_FE_RESET_R:
+		case ZEND_FE_RESET_RW:
+		case ZEND_FE_FETCH_R:
+		case ZEND_FE_FETCH_RW:
 		case ZEND_NEW:
 		case ZEND_JMP_SET:
 		case ZEND_COALESCE:
+		case ZEND_ASSERT_CHECK:
 			collect_constants = 0;
 			break;
 		case ZEND_FETCH_R:

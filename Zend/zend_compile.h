@@ -95,7 +95,8 @@ typedef union _znode_op {
 } znode_op;
 
 typedef struct _znode { /* used only during compilation */
-	int op_type;
+	zend_uchar op_type;
+	zend_uchar flag;
 	union {
 		znode_op op;
 		zval constant; /* replaced by literal/zv */
@@ -128,16 +129,10 @@ void zend_compile_var(znode *node, zend_ast *ast, uint32_t type);
 void zend_eval_const_expr(zend_ast **ast_ptr);
 void zend_const_expr_to_zval(zval *result, zend_ast *ast);
 
-#define ZEND_OPCODE_HANDLER_ARGS zend_execute_data *execute_data
-#define ZEND_OPCODE_HANDLER_ARGS_PASSTHRU execute_data
-
-typedef int (*user_opcode_handler_t) (ZEND_OPCODE_HANDLER_ARGS);
-typedef int (ZEND_FASTCALL *opcode_handler_t) (ZEND_OPCODE_HANDLER_ARGS);
-
-extern ZEND_API opcode_handler_t *zend_opcode_handlers;
+typedef int (*user_opcode_handler_t) (zend_execute_data *execute_data);
 
 struct _zend_op {
-	opcode_handler_t handler;
+	const void *handler;
 	znode_op op1;
 	znode_op op2;
 	znode_op result;
@@ -190,8 +185,8 @@ typedef struct _zend_try_catch_element {
 /* ZEND_ACC_EXPLICIT_ABSTRACT_CLASS denotes that a class was explicitly defined as abstract by using the keyword. */
 #define ZEND_ACC_IMPLICIT_ABSTRACT_CLASS	0x10
 #define ZEND_ACC_EXPLICIT_ABSTRACT_CLASS	0x20
-#define ZEND_ACC_INTERFACE		            0x80
-#define ZEND_ACC_TRAIT						0x120
+#define ZEND_ACC_INTERFACE		            0x40
+#define ZEND_ACC_TRAIT						0x80
 
 /* method flags (visibility) */
 /* The order of those must be kept - public < protected < private */
@@ -256,8 +251,6 @@ typedef struct _zend_try_catch_element {
 
 /* Function has a return type hint (or class has such non-private function) */
 #define ZEND_ACC_HAS_RETURN_TYPE		0x40000000
-
-#define ZEND_CE_IS_TRAIT(ce) (((ce)->ce_flags & ZEND_ACC_TRAIT) == ZEND_ACC_TRAIT)
 
 char *zend_visibility_string(uint32_t fn_flags);
 
@@ -353,7 +346,7 @@ struct _zend_op_array {
 	int last_literal;
 	zval *literals;
 
-	int  last_cache_slot;
+	int  cache_size;
 	void **run_time_cache;
 
 	void *reserved[ZEND_MAX_RESERVED_RESOURCES];
@@ -638,9 +631,9 @@ const char *zend_get_zendtext(void);
 int zend_get_zendleng(void);
 #endif
 
+typedef int (ZEND_FASTCALL *unary_op_type)(zval *, zval *);
+typedef int (ZEND_FASTCALL *binary_op_type)(zval *, zval *, zval *);
 
-typedef int (*unary_op_type)(zval *, zval *);
-typedef int (*binary_op_type)(zval *, zval *, zval *);
 ZEND_API unary_op_type get_unary_op(int opcode);
 ZEND_API binary_op_type get_binary_op(int opcode);
 
@@ -719,6 +712,7 @@ ZEND_API zend_bool zend_is_compiling(void);
 ZEND_API char *zend_make_compiled_string_description(const char *name);
 ZEND_API void zend_initialize_class_data(zend_class_entry *ce, zend_bool nullify_handlers);
 uint32_t zend_get_class_fetch_type(zend_string *name);
+ZEND_API zend_uchar zend_get_call_op(zend_uchar init_op, zend_function *fbc);
 
 typedef zend_bool (*zend_auto_global_callback)(zend_string *name);
 typedef struct _zend_auto_global {
@@ -731,6 +725,7 @@ typedef struct _zend_auto_global {
 ZEND_API int zend_register_auto_global(zend_string *name, zend_bool jit, zend_auto_global_callback auto_global_callback);
 ZEND_API void zend_activate_auto_globals(void);
 ZEND_API zend_bool zend_is_auto_global(zend_string *name);
+ZEND_API zend_bool zend_is_auto_global_str(char *name, size_t len);
 ZEND_API size_t zend_dirname(char *path, size_t len);
 
 int zendlex(zend_parser_stack_elem *elem);
@@ -830,9 +825,6 @@ int zend_add_literal(zend_op_array *op_array, zval *zv);
 #define ZEND_QUICK_SET			    0x00800000
 
 #define ZEND_FETCH_ARG_MASK         0x000fffff
-
-#define ZEND_FE_FETCH_BYREF	1
-#define ZEND_FE_FETCH_WITH_KEY	2
 
 #define EXT_TYPE_FREE_ON_RETURN		(1<<2)
 

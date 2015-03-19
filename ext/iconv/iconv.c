@@ -165,7 +165,7 @@ zend_module_entry iconv_module_entry = {
 
 #ifdef COMPILE_DL_ICONV
 #ifdef ZTS
-ZEND_TSRMLS_CACHE_DEFINE;
+ZEND_TSRMLS_CACHE_DEFINE();
 #endif
 ZEND_GET_MODULE(iconv)
 #endif
@@ -174,7 +174,7 @@ ZEND_GET_MODULE(iconv)
 static PHP_GINIT_FUNCTION(iconv)
 {
 #if defined(COMPILE_DL_ICONV) && defined(ZTS)
-	ZEND_TSRMLS_CACHE_UPDATE;
+	ZEND_TSRMLS_CACHE_UPDATE();
 #endif
 	iconv_globals->input_encoding = NULL;
 	iconv_globals->output_encoding = NULL;
@@ -2080,7 +2080,7 @@ PHP_FUNCTION(iconv_substr)
 	_php_iconv_show_error(err, GENERIC_SUPERSET_NAME, charset);
 
 	if (err == PHP_ICONV_ERR_SUCCESS && str->val[0] != '\0' && retval.s != NULL) {
-		RETURN_STR(retval.s);
+		RETURN_NEW_STR(retval.s);
 	}
 	smart_str_free(&retval);
 	RETURN_FALSE;

@@ -1,7 +1,7 @@
 %code top {
 /*
   +----------------------------------------------------------------------+
-  | PHP Version 5                                                        |
+  | PHP Version 7                                                        |
   +----------------------------------------------------------------------+
   | Copyright (c) 1997-2015 The PHP Group                                |
   +----------------------------------------------------------------------+
@@ -67,7 +67,6 @@ int json_yydebug = 1;
 %type <pair> pair
 
 %destructor { zval_dtor(&$$); } <value>
-%destructor { zend_hash_destroy($$); FREE_HASHTABLE($$); } <ht>
 %destructor { zval_dtor(&$$.key); zval_dtor(&$$.val); } <pair>
 
 %code {
@@ -198,7 +197,7 @@ void php_json_parser_object_update(php_json_parser *parser, zval *object, zval *
 			key = "_empty_";
 			key_len = sizeof("_empty_") - 1;
 		}
-		add_property_zval_ex(object, key, key_len, zvalue TSRMLS_CC);
+		add_property_zval_ex(object, key, key_len, zvalue);
 
 		if (Z_REFCOUNTED_P(zvalue)) {
 			Z_DELREF_P(zvalue);

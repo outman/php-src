@@ -217,7 +217,7 @@ typedef struct {
 	zend_object zo;
 } reflection_object;
 
-static inline reflection_object *reflection_object_from_obj(zend_object *obj) /* {{{ */ {
+static inline reflection_object *reflection_object_from_obj(zend_object *obj) {
 	return (reflection_object*)((char*)(obj) - XtOffsetOf(reflection_object, zo));
 }
 
@@ -235,6 +235,7 @@ static zval *_default_load_entry(zval *object, char *name, size_t name_len) /* {
 	}
 	return value;
 }
+/* }}} */
 
 static void _default_get_entry(zval *object, char *name, int name_len, zval *return_value) /* {{{ */
 {
@@ -374,7 +375,7 @@ static void _class_string(string *str, zend_class_entry *ce, zval *obj, char *in
 		char *kind = "Class";
 		if (ce->ce_flags & ZEND_ACC_INTERFACE) {
 			kind = "Interface";
-		} else if ((ce->ce_flags & ZEND_ACC_TRAIT) == ZEND_ACC_TRAIT) {
+		} else if (ce->ce_flags & ZEND_ACC_TRAIT) {
 			kind = "Trait";
 		}
 		string_printf(str, "%s%s [ ", indent, kind);
@@ -389,7 +390,7 @@ static void _class_string(string *str, zend_class_entry *ce, zval *obj, char *in
 	}
 	if (ce->ce_flags & ZEND_ACC_INTERFACE) {
 		string_printf(str, "interface ");
-	} else if ((ce->ce_flags & ZEND_ACC_TRAIT) == ZEND_ACC_TRAIT) {
+	} else if (ce->ce_flags & ZEND_ACC_TRAIT) {
 		string_printf(str, "trait ");
 	} else {
 		if (ce->ce_flags & (ZEND_ACC_IMPLICIT_ABSTRACT_CLASS|ZEND_ACC_EXPLICIT_ABSTRACT_CLASS)) {
@@ -1208,7 +1209,7 @@ static void reflection_parameter_factory(zend_function *fptr, zval *closure_obje
 		if (fptr->type == ZEND_INTERNAL_FUNCTION) {
 			ZVAL_STRING(&name, ((zend_internal_arg_info*)arg_info)->name);
 		} else {
-			ZVAL_STR(&name, zend_string_copy(arg_info->name));
+			ZVAL_STR_COPY(&name, arg_info->name);
 		}
 	} else {
 		ZVAL_NULL(&name);
@@ -1636,7 +1637,7 @@ ZEND_METHOD(reflection_function, __toString)
 	GET_REFLECTION_OBJECT_PTR(fptr);
 	string_init(&str);
 	_function_string(&str, fptr, intern->ce, "");
-	RETURN_STR(str.buf);
+	RETURN_NEW_STR(str.buf);
 }
 /* }}} */
 
@@ -1777,7 +1778,7 @@ ZEND_METHOD(reflection_function, getFileName)
 	}
 	GET_REFLECTION_OBJECT_PTR(fptr);
 	if (fptr->type == ZEND_USER_FUNCTION) {
-		RETURN_STR(zend_string_copy(fptr->op_array.filename));
+		RETURN_STR_COPY(fptr->op_array.filename);
 	}
 	RETURN_FALSE;
 }
@@ -1831,7 +1832,7 @@ ZEND_METHOD(reflection_function, getDocComment)
 	}
 	GET_REFLECTION_OBJECT_PTR(fptr);
 	if (fptr->type == ZEND_USER_FUNCTION && fptr->op_array.doc_comment) {
-		RETURN_STR(zend_string_copy(fptr->op_array.doc_comment));
+		RETURN_STR_COPY(fptr->op_array.doc_comment);
 	}
 	RETURN_FALSE;
 }
@@ -1852,6 +1853,12 @@ ZEND_METHOD(reflection_function, getStaticVariables)
 	/* Return an empty array in case no static variables exist */
 	array_init(return_value);
 	if (fptr->type == ZEND_USER_FUNCTION && fptr->op_array.static_variables != NULL) {
+		if (GC_REFCOUNT(fptr->op_array.static_variables) > 1) {
+			if (!(GC_FLAGS(fptr->op_array.static_variables) & IS_ARRAY_IMMUTABLE)) {
+				GC_REFCOUNT(fptr->op_array.static_variables)--;
+			}
+			fptr->op_array.static_variables = zend_array_dup(fptr->op_array.static_variables);
+		}
 		zend_hash_apply_with_argument(fptr->op_array.static_variables, (apply_func_arg_t) zval_update_constant_inline_change, fptr->common.scope);
 		zend_hash_copy(Z_ARRVAL_P(return_value), fptr->op_array.static_variables, zval_add_ref);
 	}
@@ -2282,7 +2289,7 @@ ZEND_METHOD(reflection_parameter, __construct)
 		if (fptr->type == ZEND_INTERNAL_FUNCTION) {
 			ZVAL_STRING(&name, ((zend_internal_arg_info*)arg_info)[position].name);
 		} else {
-			ZVAL_STR(&name, zend_string_copy(arg_info[position].name));
+			ZVAL_STR_COPY(&name, arg_info[position].name);
 		}
 	} else {
 		ZVAL_NULL(&name);
@@ -2318,7 +2325,7 @@ ZEND_METHOD(reflection_parameter, __toString)
 	GET_REFLECTION_OBJECT_PTR(param);
 	string_init(&str);
 	_parameter_string(&str, param->fptr, param->arg_info, param->offset, param->required, "");
-	RETURN_STR(str.buf);
+	RETURN_NEW_STR(str.buf);
 }
 /* }}} */
 
@@ -2662,7 +2669,7 @@ ZEND_METHOD(reflection_parameter, getDefaultValueConstantName)
 
 	precv = _reflection_param_get_default_precv(INTERNAL_FUNCTION_PARAM_PASSTHRU, param);
 	if (precv && Z_TYPE_P(RT_CONSTANT(&param->fptr->op_array, precv->op2)) == IS_CONSTANT) {
-		RETURN_STR(zend_string_copy(Z_STR_P(RT_CONSTANT(&param->fptr->op_array, precv->op2))));
+		RETURN_STR_COPY(Z_STR_P(RT_CONSTANT(&param->fptr->op_array, precv->op2)));
 	}
 }
 /* }}} */
@@ -2799,7 +2806,7 @@ ZEND_METHOD(reflection_method, __toString)
 	GET_REFLECTION_OBJECT_PTR(mptr);
 	string_init(&str);
 	_function_string(&str, mptr, intern->ce, "");
-	RETURN_STR(str.buf);
+	RETURN_NEW_STR(str.buf);
 }
 /* }}} */
 
@@ -3524,7 +3531,7 @@ ZEND_METHOD(reflection_class, __toString)
 	GET_REFLECTION_OBJECT_PTR(ce);
 	string_init(&str);
 	_class_string(&str, ce, &intern->obj, "");
-	RETURN_STR(str.buf);
+	RETURN_NEW_STR(str.buf);
 }
 /* }}} */
 
@@ -3581,7 +3588,7 @@ ZEND_METHOD(reflection_class, getFileName)
 	}
 	GET_REFLECTION_OBJECT_PTR(ce);
 	if (ce->type == ZEND_USER_CLASS) {
-		RETURN_STR(zend_string_copy(ce->info.user.filename));
+		RETURN_STR_COPY(ce->info.user.filename);
 	}
 	RETURN_FALSE;
 }
@@ -3635,7 +3642,7 @@ ZEND_METHOD(reflection_class, getDocComment)
 	}
 	GET_REFLECTION_OBJECT_PTR(ce);
 	if (ce->type == ZEND_USER_CLASS && ce->info.user.doc_comment) {
-		RETURN_STR(zend_string_copy(ce->info.user.doc_comment));
+		RETURN_STR_COPY(ce->info.user.doc_comment);
 	}
 	RETURN_FALSE;
 }
@@ -4084,7 +4091,7 @@ ZEND_METHOD(reflection_class, isInstantiable)
 		return;
 	}
 	GET_REFLECTION_OBJECT_PTR(ce);
-	if (ce->ce_flags & (ZEND_ACC_INTERFACE | ZEND_ACC_EXPLICIT_ABSTRACT_CLASS | ZEND_ACC_IMPLICIT_ABSTRACT_CLASS)) {
+	if (ce->ce_flags & (ZEND_ACC_INTERFACE | ZEND_ACC_TRAIT | ZEND_ACC_EXPLICIT_ABSTRACT_CLASS | ZEND_ACC_IMPLICIT_ABSTRACT_CLASS)) {
 		RETURN_FALSE;
 	}
 
@@ -4143,7 +4150,7 @@ ZEND_METHOD(reflection_class, isInterface)
    Returns whether this is a trait */
 ZEND_METHOD(reflection_class, isTrait)
 {
-	_class_check_flag(INTERNAL_FUNCTION_PARAM_PASSTHRU, ZEND_ACC_TRAIT & ~ZEND_ACC_EXPLICIT_ABSTRACT_CLASS);
+	_class_check_flag(INTERNAL_FUNCTION_PARAM_PASSTHRU, ZEND_ACC_TRAIT);
 }
 /* }}} */
 
@@ -4877,7 +4884,7 @@ ZEND_METHOD(reflection_property, __toString)
 	GET_REFLECTION_OBJECT_PTR(ref);
 	string_init(&str);
 	_property_string(&str, &ref->prop, NULL, "");
-	RETURN_STR(str.buf);
+	RETURN_NEW_STR(str.buf);
 }
 /* }}} */
 
@@ -5128,7 +5135,7 @@ ZEND_METHOD(reflection_property, getDocComment)
 	}
 	GET_REFLECTION_OBJECT_PTR(ref);
 	if (ref->prop.doc_comment) {
-		RETURN_STR(zend_string_copy(ref->prop.doc_comment));
+		RETURN_STR_COPY(ref->prop.doc_comment);
 	}
 	RETURN_FALSE;
 }
@@ -5216,7 +5223,7 @@ ZEND_METHOD(reflection_extension, __toString)
 	GET_REFLECTION_OBJECT_PTR(module);
 	string_init(&str);
 	_extension_string(&str, module, "");
-	RETURN_STR(str.buf);
+	RETURN_NEW_STR(str.buf);
 }
 /* }}} */
 
@@ -5582,7 +5589,7 @@ ZEND_METHOD(reflection_zend_extension, __toString)
 	GET_REFLECTION_OBJECT_PTR(extension);
 	string_init(&str);
 	_zend_extension_string(&str, extension, "");
-	RETURN_STR(str.buf);
+	RETURN_NEW_STR(str.buf);
 }
 /* }}} */
 

@@ -1,6 +1,6 @@
 /*
    +----------------------------------------------------------------------+
-   | PHP Version 5                                                        |
+   | PHP Version 7                                                        |
    +----------------------------------------------------------------------+
    | Copyright (c) 1997-2015 The PHP Group                                |
    +----------------------------------------------------------------------+
@@ -332,7 +332,7 @@ static void phpdbg_delete_ht_watchpoints_recursive(phpdbg_watchpoint_t *watch) {
 		if (strkey) {
 			str_len = asprintf(&str, "%.*s%s%s%s", (int) watch->str_len, watch->str, (watch->flags & PHPDBG_WATCH_ARRAY) ? "[" : "->", phpdbg_get_property_key(strkey->val), (watch->flags & PHPDBG_WATCH_ARRAY) ? "]" : "");
 		} else {
-			str_len = asprintf(&str, "%.*s%s%lli%s", (int) watch->str_len, watch->str, (watch->flags & PHPDBG_WATCH_ARRAY) ? "[" : "->", numkey, (watch->flags & PHPDBG_WATCH_ARRAY) ? "]" : "");
+			str_len = asprintf(&str, "%.*s%s" ZEND_LONG_FMT "%s", (int) watch->str_len, watch->str, (watch->flags & PHPDBG_WATCH_ARRAY) ? "[" : "->", numkey, (watch->flags & PHPDBG_WATCH_ARRAY) ? "]" : "");
 		}
 
 		if ((watchpoint = zend_hash_str_find_ptr(&PHPDBG_G(watchpoints), str, str_len))) {
@@ -407,14 +407,14 @@ PHPDBG_API int phpdbg_watchpoint_parse_input(char *input, size_t len, HashTable 
 
 static int phpdbg_watchpoint_parse_symtables(char *input, size_t len, int (*callback)(phpdbg_watchpoint_t *)) {
 	if (EG(scope) && len >= 5 && !memcmp("$this", input, 5)) {
-		zend_hash_str_add(&EG(current_execute_data)->symbol_table->ht, ZEND_STRL("this"), &EG(current_execute_data)->This);
+		zend_hash_str_add(EG(current_execute_data)->symbol_table, ZEND_STRL("this"), &EG(current_execute_data)->This);
 	}
 
-	if (phpdbg_is_auto_global(input, len) && phpdbg_watchpoint_parse_input(input, len, &EG(symbol_table).ht, 0, callback, 1) != FAILURE) {
+	if (phpdbg_is_auto_global(input, len) && phpdbg_watchpoint_parse_input(input, len, &EG(symbol_table), 0, callback, 1) != FAILURE) {
 		return SUCCESS;
 	}
 
-	return phpdbg_watchpoint_parse_input(input, len, &EG(current_execute_data)->symbol_table->ht, 0, callback, 0);
+	return phpdbg_watchpoint_parse_input(input, len, EG(current_execute_data)->symbol_table, 0, callback, 0);
 }
 
 PHPDBG_WATCH(delete) /* {{{ */

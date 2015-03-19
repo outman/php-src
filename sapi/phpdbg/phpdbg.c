@@ -1,6 +1,6 @@
 /*
    +----------------------------------------------------------------------+
-   | PHP Version 5                                                        |
+   | PHP Version 7                                                        |
    +----------------------------------------------------------------------+
    | Copyright (c) 1997-2015 The PHP Group                                |
    +----------------------------------------------------------------------+
@@ -65,6 +65,7 @@ PHP_INI_BEGIN()
 PHP_INI_END()
 
 static zend_bool phpdbg_booted = 0;
+static zend_bool phpdbg_fully_started = 0;
 
 #if PHP_VERSION_ID >= 50500
 void (*zend_execute_old)(zend_execute_data *execute_data);
@@ -523,6 +524,10 @@ static void php_sapi_phpdbg_log_message(char *message) /* {{{ */
 				phpdbg_list_file(file, 3, zend_get_executed_lineno() - 1, zend_get_executed_lineno());
 				efree(file);
 
+				if (!phpdbg_fully_started) {
+					return;
+				}
+
 				do {
 					switch (phpdbg_interactive(1)) {
 						case PHPDBG_LEAVE:
@@ -978,7 +983,14 @@ void *phpdbg_malloc_wrapper(size_t size) /* {{{ */
 
 void phpdbg_free_wrapper(void *p) /* {{{ */
 {
-	zend_mm_free(phpdbg_mm_get_heap(), p);
+	zend_mm_heap *heap = phpdbg_mm_get_heap();
+	if (UNEXPECTED(heap == p)) {
+		/* TODO: heap maybe allocated by mmap(zend_mm_init) or malloc(USE_ZEND_ALLOC=0) 
+		 * let's prevent it from segfault for now
+		 */
+	} else {
+		zend_mm_free(heap, p);
+	}
 } /* }}} */
 
 void *phpdbg_realloc_wrapper(void *ptr, size_t size) /* {{{ */
@@ -1476,7 +1488,11 @@ phpdbg_main:
 			if (settings) {
 				PHPDBG_G(flags) |= PHPDBG_DISCARD_OUTPUT;
 			}
-			phpdbg_compile();
+
+			zend_try {
+				phpdbg_compile();
+			} zend_end_try();
+
 			PHPDBG_G(flags) &= ~PHPDBG_DISCARD_OUTPUT;
 		}
 
@@ -1484,6 +1500,8 @@ phpdbg_main:
 		if (step) {
 			PHPDBG_G(flags) |= PHPDBG_IS_STEPPING;
 		}
+
+		phpdbg_fully_started = 1;
 
 /* #ifndef for making compiler shutting up */
 #ifndef _WIN32
