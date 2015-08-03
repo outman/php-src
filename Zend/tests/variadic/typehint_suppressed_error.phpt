@@ -9,10 +9,10 @@ function test(array... $args) {
 
 try {
 	test([0], [1], 2);
-} catch(EngineException $e) {
+} catch(Error $e) {
 	var_dump($e->getMessage());
 }
 
 ?>
 --EXPECTF--
-string(%d) "Argument 3 passed to test() must be of the type array, integer given, called in %s on line %d and defined"
+string(%d) "Argument 3 passed to test() must be of the type array, integer given, called in %s on line %d"

@@ -57,17 +57,13 @@ PHPDBG_COMMAND(export);
 PHPDBG_COMMAND(register);
 PHPDBG_COMMAND(quit);
 PHPDBG_COMMAND(watch);
+PHPDBG_COMMAND(next);
 PHPDBG_COMMAND(eol);
 PHPDBG_COMMAND(wait); /* }}} */
 
 /* {{{ prompt commands */
 extern const phpdbg_command_t phpdbg_prompt_commands[]; /* }}} */
 
-/* {{{ */
-#if PHP_VERSION_ID >= 50500
 void phpdbg_execute_ex(zend_execute_data *execute_data);
-#else
-void phpdbg_execute_ex(zend_op_array *op_array);
-#endif /* }}} */
 
 #endif /* PHPDBG_PROMPT_H */

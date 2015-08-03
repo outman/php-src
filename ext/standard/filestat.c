@@ -85,18 +85,6 @@
 #include "basic_functions.h"
 #include "php_filestat.h"
 
-#ifndef S_ISDIR
-#define S_ISDIR(mode)	(((mode)&S_IFMT) == S_IFDIR)
-#endif
-#ifndef S_ISREG
-#define S_ISREG(mode)	(((mode)&S_IFMT) == S_IFREG)
-#endif
-#ifndef S_ISLNK
-#define S_ISLNK(mode)	(((mode)&S_IFMT) == S_IFLNK)
-#endif
-
-#define S_IXROOT ( S_IXUSR | S_IXGRP | S_IXOTH )
-
 PHP_RINIT_FUNCTION(filestat) /* {{{ */
 {
 	BG(CurrentStatFile)=NULL;
@@ -765,7 +753,7 @@ PHP_FUNCTION(touch)
 			}
 			stream = php_stream_open_wrapper_ex(filename, "c", REPORT_ERRORS, NULL, NULL);
 			if(stream != NULL) {
-				php_stream_pclose(stream);
+				php_stream_close(stream);
 				RETURN_TRUE;
 			} else {
 				RETURN_FALSE;

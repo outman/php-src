@@ -360,7 +360,7 @@ zend_module_entry sockets_module_entry = {
 	NULL,
 	PHP_RSHUTDOWN(sockets),
 	PHP_MINFO(sockets),
-	NO_VERSION_YET,
+	PHP_SOCKETS_VERSION,
 	PHP_MODULE_GLOBALS(sockets),
 	PHP_GINIT(sockets),
 	NULL,
@@ -1079,7 +1079,8 @@ PHP_FUNCTION(socket_close)
 		if (stream != NULL) {
 			/* close & destroy stream, incl. removing it from the rsrc list;
 			 * resource stored in php_sock->zstream will become invalid */
-			php_stream_free(stream, PHP_STREAM_FREE_CLOSE |
+			php_stream_free(stream,
+					PHP_STREAM_FREE_KEEP_RSRC | PHP_STREAM_FREE_CLOSE |
 					(stream->is_persistent?PHP_STREAM_FREE_CLOSE_PERSISTENT:0));
 		}
 	}
@@ -1151,9 +1152,9 @@ PHP_FUNCTION(socket_read)
 	}
 
 	if (type == PHP_NORMAL_READ) {
-		retval = php_read(php_sock, tmpbuf->val, length, 0);
+		retval = php_read(php_sock, ZSTR_VAL(tmpbuf), length, 0);
 	} else {
-		retval = recv(php_sock->bsd_socket, tmpbuf->val, length, 0);
+		retval = recv(php_sock->bsd_socket, ZSTR_VAL(tmpbuf), length, 0);
 	}
 
 	if (retval == -1) {
@@ -1177,9 +1178,9 @@ PHP_FUNCTION(socket_read)
 		RETURN_EMPTY_STRING();
 	}
 
-	tmpbuf = zend_string_realloc(tmpbuf, retval, 0);
-	tmpbuf->len = retval;
-	tmpbuf->val[tmpbuf->len] = '\0' ;
+	tmpbuf = zend_string_truncate(tmpbuf, retval, 0);
+	ZSTR_LEN(tmpbuf) = retval;
+	ZSTR_VAL(tmpbuf)[ZSTR_LEN(tmpbuf)] = '\0' ;
 
 	RETURN_NEW_STR(tmpbuf);
 }
@@ -1607,14 +1608,14 @@ PHP_FUNCTION(socket_recv)
 
 	recv_buf = zend_string_alloc(len, 0);
 
-	if ((retval = recv(php_sock->bsd_socket, recv_buf->val, len, flags)) < 1) {
+	if ((retval = recv(php_sock->bsd_socket, ZSTR_VAL(recv_buf), len, flags)) < 1) {
 		efree(recv_buf);
 
 		zval_dtor(buf);
 		ZVAL_NULL(buf);
 	} else {
-		recv_buf->len = retval;
-		recv_buf->val[recv_buf->len] = '\0';
+		ZSTR_LEN(recv_buf) = retval;
+		ZSTR_VAL(recv_buf)[ZSTR_LEN(recv_buf)] = '\0';
 
 		/* Rebuild buffer zval */
 		zval_dtor(buf);
@@ -1696,15 +1697,15 @@ PHP_FUNCTION(socket_recvfrom)
 		case AF_UNIX:
 			slen = sizeof(s_un);
 			s_un.sun_family = AF_UNIX;
-			retval = recvfrom(php_sock->bsd_socket, recv_buf->val, arg3, arg4, (struct sockaddr *)&s_un, (socklen_t *)&slen);
+			retval = recvfrom(php_sock->bsd_socket, ZSTR_VAL(recv_buf), arg3, arg4, (struct sockaddr *)&s_un, (socklen_t *)&slen);
 
 			if (retval < 0) {
 				PHP_SOCKET_ERROR(php_sock, "unable to recvfrom", errno);
 				zend_string_free(recv_buf);
 				RETURN_FALSE;
 			}
-			recv_buf->len = retval;
-			recv_buf->val[recv_buf->len] = '\0';
+			ZSTR_LEN(recv_buf) = retval;
+			ZSTR_VAL(recv_buf)[ZSTR_LEN(recv_buf)] = '\0';
 
 			zval_dtor(arg2);
 			zval_dtor(arg5);
@@ -1723,15 +1724,15 @@ PHP_FUNCTION(socket_recvfrom)
 				WRONG_PARAM_COUNT;
 			}
 
-			retval = recvfrom(php_sock->bsd_socket, recv_buf->val, arg3, arg4, (struct sockaddr *)&sin, (socklen_t *)&slen);
+			retval = recvfrom(php_sock->bsd_socket, ZSTR_VAL(recv_buf), arg3, arg4, (struct sockaddr *)&sin, (socklen_t *)&slen);
 
 			if (retval < 0) {
 				PHP_SOCKET_ERROR(php_sock, "unable to recvfrom", errno);
 				zend_string_free(recv_buf);
 				RETURN_FALSE;
 			}
-			recv_buf->len = retval;
-			recv_buf->val[recv_buf->len] = '\0';
+			ZSTR_LEN(recv_buf) = retval;
+			ZSTR_VAL(recv_buf)[ZSTR_LEN(recv_buf)] = '\0';
 
 			zval_dtor(arg2);
 			zval_dtor(arg5);
@@ -1754,15 +1755,15 @@ PHP_FUNCTION(socket_recvfrom)
 				WRONG_PARAM_COUNT;
 			}
 
-			retval = recvfrom(php_sock->bsd_socket, recv_buf->val, arg3, arg4, (struct sockaddr *)&sin6, (socklen_t *)&slen);
+			retval = recvfrom(php_sock->bsd_socket, ZSTR_VAL(recv_buf), arg3, arg4, (struct sockaddr *)&sin6, (socklen_t *)&slen);
 
 			if (retval < 0) {
 				PHP_SOCKET_ERROR(php_sock, "unable to recvfrom", errno);
 				zend_string_free(recv_buf);
 				RETURN_FALSE;
 			}
-			recv_buf->len = retval;
-			recv_buf->val[recv_buf->len] = '\0';
+			ZSTR_LEN(recv_buf) = retval;
+			ZSTR_VAL(recv_buf)[ZSTR_LEN(recv_buf)] = '\0';
 
 			zval_dtor(arg2);
 			zval_dtor(arg5);

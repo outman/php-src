@@ -53,10 +53,6 @@
 #include <sys/socket.h>
 #endif
 
-#ifndef S_ISREG
-#define S_ISREG(mode)	(((mode) & S_IFMT) == S_IFREG)
-#endif
-
 #ifdef PHP_WIN32
 #include <winsock2.h>
 #elif defined(NETWARE) && defined(USE_WINSOCK)
@@ -94,24 +90,24 @@ PHPAPI ZEND_INI_MH(OnUpdateBaseDir)
 
 	if (stage == PHP_INI_STAGE_STARTUP || stage == PHP_INI_STAGE_SHUTDOWN || stage == PHP_INI_STAGE_ACTIVATE || stage == PHP_INI_STAGE_DEACTIVATE) {
 		/* We're in a PHP_INI_SYSTEM context, no restrictions */
-		*p = new_value ? new_value->val : NULL;
+		*p = new_value ? ZSTR_VAL(new_value) : NULL;
 		return SUCCESS;
 	}
 
 	/* Otherwise we're in runtime */
 	if (!*p || !**p) {
 		/* open_basedir not set yet, go ahead and give it a value */
-		*p = new_value->val;
+		*p = ZSTR_VAL(new_value);
 		return SUCCESS;
 	}
 
 	/* Shortcut: When we have a open_basedir and someone tries to unset, we know it'll fail */
-	if (!new_value || !*new_value->val) {
+	if (!new_value || !*ZSTR_VAL(new_value)) {
 		return FAILURE;
 	}
 
 	/* Is the proposed open_basedir at least as restrictive as the current setting? */
-	ptr = pathbuf = estrdup(new_value->val);
+	ptr = pathbuf = estrdup(ZSTR_VAL(new_value));
 	while (ptr && *ptr) {
 		end = strchr(ptr, DEFAULT_DIR_SEPARATOR);
 		if (end != NULL) {
@@ -128,7 +124,7 @@ PHPAPI ZEND_INI_MH(OnUpdateBaseDir)
 	efree(pathbuf);
 
 	/* Everything checks out, set it */
-	*p = new_value->val;
+	*p = ZSTR_VAL(new_value);
 
 	return SUCCESS;
 }
@@ -173,25 +169,19 @@ PHPAPI int php_check_specific_open_basedir(const char *basedir, const char *path
 
 	while (VCWD_REALPATH(path_tmp, resolved_name) == NULL) {
 #if defined(PHP_WIN32) || defined(HAVE_SYMLINK)
-#if defined(PHP_WIN32)
-		if (EG(windows_version_info).dwMajorVersion > 5) {
-#endif
-			if (nesting_level == 0) {
-				int ret;
-				char buf[MAXPATHLEN];
+		if (nesting_level == 0) {
+			int ret;
+			char buf[MAXPATHLEN];
 
-				ret = php_sys_readlink(path_tmp, buf, MAXPATHLEN - 1);
-				if (ret < 0) {
-					/* not a broken symlink, move along.. */
-				} else {
-					/* put the real path into the path buffer */
-					memcpy(path_tmp, buf, ret);
-					path_tmp[ret] = '\0';
-				}
+			ret = php_sys_readlink(path_tmp, buf, MAXPATHLEN - 1);
+			if (ret < 0) {
+				/* not a broken symlink, move along.. */
+			} else {
+				/* put the real path into the path buffer */
+				memcpy(path_tmp, buf, ret);
+				path_tmp[ret] = '\0';
 			}
-#if defined(PHP_WIN32)
 		}
-#endif
 #endif
 
 #if defined(PHP_WIN32) || defined(NETWARE)
@@ -583,10 +573,10 @@ PHPAPI zend_string *php_resolve_path(const char *filename, int filename_length, 
 	 */
 	if (zend_is_executing() &&
 	    (exec_filename = zend_get_executed_filename_ex()) != NULL) {
-		const char *exec_fname = exec_filename->val;
-		size_t exec_fname_length = exec_filename->len;
+		const char *exec_fname = ZSTR_VAL(exec_filename);
+		size_t exec_fname_length = ZSTR_LEN(exec_filename);
 
-		while ((--exec_fname_length >= 0) && !IS_SLASH(exec_fname[exec_fname_length]));
+		while ((--exec_fname_length < SIZE_MAX) && !IS_SLASH(exec_fname[exec_fname_length]));
 		if (exec_fname_length > 0 &&
 		    exec_fname_length + 1 + filename_length + 1 < MAXPATHLEN) {
 			memcpy(trypath, exec_fname, exec_fname_length + 1);
@@ -661,10 +651,10 @@ PHPAPI FILE *php_fopen_with_path(const char *filename, const char *mode, const c
 	 */
 	if (zend_is_executing() &&
 	    (exec_filename = zend_get_executed_filename_ex()) != NULL) {
-		const char *exec_fname = exec_filename->val;
-		size_t exec_fname_length = exec_filename->len;
+		const char *exec_fname = ZSTR_VAL(exec_filename);
+		size_t exec_fname_length = ZSTR_LEN(exec_filename);
 
-		while ((--exec_fname_length >= 0) && !IS_SLASH(exec_fname[exec_fname_length]));
+		while ((--exec_fname_length < SIZE_MAX) && !IS_SLASH(exec_fname[exec_fname_length]));
 		if ((exec_fname && exec_fname[0] == '[') || exec_fname_length <= 0) {
 			/* [no active file] or no path */
 			pathbuf = estrdup(path);

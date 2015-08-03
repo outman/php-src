@@ -244,7 +244,7 @@ zend_module_entry com_dotnet_module_entry = {
 	PHP_RINIT(com_dotnet),
 	PHP_RSHUTDOWN(com_dotnet),
 	PHP_MINFO(com_dotnet),
-	"0.1",
+	PHP_COM_DOTNET_VERSION,
 	PHP_MODULE_GLOBALS(com_dotnet),
 	PHP_GINIT(com_dotnet),
 	NULL,
@@ -358,7 +358,7 @@ PHP_MINIT_FUNCTION(com_dotnet)
 	php_com_persist_minit(INIT_FUNC_ARGS_PASSTHRU);
 
 	INIT_CLASS_ENTRY(ce, "com_exception", NULL);
-	php_com_exception_class_entry = zend_register_internal_class_ex(&ce, zend_exception_get_default());
+	php_com_exception_class_entry = zend_register_internal_class_ex(&ce, zend_ce_exception);
 	php_com_exception_class_entry->ce_flags |= ZEND_ACC_FINAL;
 /*	php_com_exception_class_entry->constructor->common.fn_flags |= ZEND_ACC_PROTECTED; */
 

@@ -46,7 +46,7 @@ int json_yydebug = 1;
 %union {
 	zval value;
 	struct {
-		zval key;
+		zend_string *key;
 		zval val;
 	} pair;
 }
@@ -67,13 +67,13 @@ int json_yydebug = 1;
 %type <pair> pair
 
 %destructor { zval_dtor(&$$); } <value>
-%destructor { zval_dtor(&$$.key); zval_dtor(&$$.val); } <pair>
+%destructor { zend_string_release($$.key); zval_dtor(&$$.val); } <pair>
 
 %code {
 int php_json_yylex(union YYSTYPE *value, php_json_parser *parser);
 void php_json_yyerror(php_json_parser *parser, char const *msg);
 void php_json_parser_object_init(php_json_parser *parser, zval *object);
-void php_json_parser_object_update(php_json_parser *parser, zval *object, zval *zkey, zval *zvalue);
+int php_json_parser_object_update(php_json_parser *parser, zval *object, zend_string *key, zval *zvalue);
 void php_json_parser_array_init(zval *object);
 void php_json_parser_array_append(zval *array, zval *zvalue);
 
@@ -89,53 +89,114 @@ void php_json_parser_array_append(zval *array, zval *zvalue);
 %% /* Rules */
 
 start:
-		value PHP_JSON_T_EOI    { $$ = $1; ZVAL_COPY_VALUE(parser->return_value, &$1); PHP_JSON_USE($2); YYACCEPT; }
-	|	value errlex            { PHP_JSON_USE_2($$, $1, $2); }
+		value PHP_JSON_T_EOI
+			{
+				ZVAL_COPY_VALUE(&$$, &$1);
+				ZVAL_COPY_VALUE(parser->return_value, &$1);
+				PHP_JSON_USE($2); YYACCEPT;
+			}
+	|	value errlex
+			{
+				PHP_JSON_USE_2($$, $1, $2);
+			}
 ;
 
 object:
-		'{' { PHP_JSON_DEPTH_INC; } members object_end { PHP_JSON_DEPTH_DEC; $$ = $3; }
+		'{' { PHP_JSON_DEPTH_INC; } members object_end
+			{
+				PHP_JSON_DEPTH_DEC;
+				$$ = $3;
+			}
 ;
 
 object_end:
 		'}'
-	|	']'                     { parser->scanner.errcode = PHP_JSON_ERROR_STATE_MISMATCH; YYERROR; }
+	|	']'
+			{
+				parser->scanner.errcode = PHP_JSON_ERROR_STATE_MISMATCH;
+				YYERROR;
+			}
 ;
 
 members:
-		/* empty */             { php_json_parser_object_init(parser, &$$); }
+		/* empty */
+			{
+				php_json_parser_object_init(parser, &$$);
+			}
 	|	member
 ;
 
 member:
-		pair                    { php_json_parser_object_init(parser, &$$); php_json_parser_object_update(parser, &$$, &$1.key, &$1.val); }
-	|	member ',' pair         { php_json_parser_object_update(parser, &$1, &$3.key, &$3.val); $$ = $1; }
-	|	member errlex           { PHP_JSON_USE_2($$, $1, $2); }
+		pair
+			{
+				php_json_parser_object_init(parser, &$$);
+				if (php_json_parser_object_update(parser, &$$, $1.key, &$1.val) == FAILURE)
+					YYERROR;
+			}
+	|	member ',' pair
+			{
+				if (php_json_parser_object_update(parser, &$1, $3.key, &$3.val) == FAILURE)
+					YYERROR;
+				ZVAL_COPY_VALUE(&$$, &$1);
+			}
+	|	member errlex
+			{
+				PHP_JSON_USE_2($$, $1, $2);
+			}
 ;
 
 pair:
-		key ':' value           { $$.key = $1; $$.val = $3; }
-	|	key errlex              { PHP_JSON_USE_2($$, $1, $2); }
+		key ':' value
+			{
+				$$.key = Z_STR($1);
+				ZVAL_COPY_VALUE(&$$.val, &$3);
+			}
+	|	key errlex
+			{
+				PHP_JSON_USE_2($$, $1, $2);
+			}
 ;
 
 array:
-		'[' { PHP_JSON_DEPTH_INC; } elements array_end { PHP_JSON_DEPTH_DEC; $$ = $3; }
+		'[' { PHP_JSON_DEPTH_INC; } elements array_end
+			{
+				PHP_JSON_DEPTH_DEC;
+				ZVAL_COPY_VALUE(&$$, &$3);
+			}
 ;
 
 array_end:
 		']'
-	|	'}'                     { parser->scanner.errcode = PHP_JSON_ERROR_STATE_MISMATCH; YYERROR; }
+	|	'}'
+			{
+				parser->scanner.errcode = PHP_JSON_ERROR_STATE_MISMATCH;
+				YYERROR;
+			}
 ;
 
 elements:
-		/* empty */             { php_json_parser_array_init(&$$); }
+		/* empty */
+			{
+				php_json_parser_array_init(&$$);
+			}
 	|	element
 ;
 
 element:
-		value                   { php_json_parser_array_init(&$$); php_json_parser_array_append(&$$, &$1); }
-	|	element ',' value       { php_json_parser_array_append(&$1, &$3); $$ = $1; }
-	|	element errlex          { PHP_JSON_USE_2($$, $1, $2); }
+		value
+			{
+				php_json_parser_array_init(&$$);
+				php_json_parser_array_append(&$$, &$1);
+			}
+	|	element ',' value
+			{
+				php_json_parser_array_append(&$1, &$3);
+				ZVAL_COPY_VALUE(&$$, &$1);
+			}
+	|	element errlex
+			{
+				PHP_JSON_USE_2($$, $1, $2);
+			}
 ;
 
 key:
@@ -157,7 +218,11 @@ value:
 ;
 
 errlex:
-		PHP_JSON_T_ERROR             { PHP_JSON_USE_1($$, $1); YYERROR; }
+		PHP_JSON_T_ERROR
+			{
+				PHP_JSON_USE_1($$, $1);
+				YYERROR;
+			}
 ;
 	
 %% /* Functions */
@@ -185,25 +250,33 @@ void php_json_parser_object_init(php_json_parser *parser, zval *object)
 	}
 }
 
-void php_json_parser_object_update(php_json_parser *parser, zval *object, zval *zkey, zval *zvalue)
+int php_json_parser_object_update(php_json_parser *parser, zval *object, zend_string *key, zval *zvalue)
 {
-	char *key = Z_STRVAL_P(zkey);
-	int key_len = Z_STRLEN_P(zkey);
-
-	if (parser->scanner.options & PHP_JSON_OBJECT_AS_ARRAY) {
-		add_assoc_zval_ex(object, key, key_len, zvalue);
+	/* if JSON_OBJECT_AS_ARRAY is set */
+	if (Z_TYPE_P(object) == IS_ARRAY) {
+		zend_symtable_update(Z_ARRVAL_P(object), key, zvalue);
 	} else {
-		if (key_len == 0) {
-			key = "_empty_";
-			key_len = sizeof("_empty_") - 1;
+		zval zkey;
+		if (ZSTR_LEN(key) == 0) {
+			zend_string_release(key);
+			key = zend_string_init("_empty_", sizeof("_empty_") - 1, 0);
+		} else if (ZSTR_VAL(key)[0] == '\0') {
+			parser->scanner.errcode = PHP_JSON_ERROR_INVALID_PROPERTY_NAME;
+			zend_string_release(key);
+			zval_dtor(zvalue);
+			zval_dtor(object);
+			return FAILURE;
 		}
-		add_property_zval_ex(object, key, key_len, zvalue);
+		ZVAL_NEW_STR(&zkey, key);
+		zend_std_write_property(object, &zkey, zvalue, NULL); 
 
 		if (Z_REFCOUNTED_P(zvalue)) {
 			Z_DELREF_P(zvalue);
 		}
 	}
-	zval_dtor(zkey);
+	zend_string_release(key);
+
+	return SUCCESS;
 }
 
 void php_json_parser_array_init(zval *array)
@@ -213,7 +286,7 @@ void php_json_parser_array_init(zval *array)
 
 void php_json_parser_array_append(zval *array, zval *zvalue)
 {
-	add_next_index_zval(array, zvalue);
+	zend_hash_next_index_insert(Z_ARRVAL_P(array), zvalue);
 }
 	
 int php_json_yylex(union YYSTYPE *value, php_json_parser *parser)

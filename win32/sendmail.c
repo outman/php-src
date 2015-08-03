@@ -607,7 +607,7 @@ static int SendText(char *RPath, char *Subject, char *mailTo, char *mailCc, char
 	data_cln = php_str_to_str(data, strlen(data), PHP_WIN32_MAIL_DOT_PATTERN, sizeof(PHP_WIN32_MAIL_DOT_PATTERN) - 1,
 					PHP_WIN32_MAIL_DOT_REPLACE, sizeof(PHP_WIN32_MAIL_DOT_REPLACE) - 1);
 	if (!data_cln) {
-		data_cln = STR_EMPTY_ALLOC();
+		data_cln = ZSTR_EMPTY_ALLOC();
 	}
 
 	/* send message contents in 1024 chunks */
@@ -868,7 +868,7 @@ static int Post(LPCSTR msg)
 //********************************************************************/
 static int Ack(char **server_response)
 {
-	static char buf[MAIL_BUFFER_SIZE];
+	ZEND_TLS char buf[MAIL_BUFFER_SIZE];
 	int rlen;
 	int Index = 0;
 	int Received = 0;
@@ -977,3 +977,12 @@ static int FormatEmailAddress(char* Buf, char* EmailAddress, char* FormatString)
 	}
 	return snprintf(Buf, MAIL_BUFFER_SIZE , FormatString , EmailAddress );
 } /* end FormatEmailAddress() */
+
+/*
+ * Local variables:
+ * tab-width: 4
+ * c-basic-offset: 4
+ * End:
+ * vim600: sw=4 ts=4 fdm=marker
+ * vim<600: sw=4 ts=4
+ */

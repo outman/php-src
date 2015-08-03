@@ -36,6 +36,7 @@
 #include "zend_modules.h"
 #include "zend_float.h"
 #include "zend_multibyte.h"
+#include "zend_multiply.h"
 #include "zend_arena.h"
 
 /* Define ZTS if you want a thread-safe Zend */
@@ -61,10 +62,6 @@ END_EXTERN_C()
 #define ZEND_EARLY_BINDING_COMPILE_TIME 0
 #define ZEND_EARLY_BINDING_DELAYED      1
 #define ZEND_EARLY_BINDING_DELAYED_ALL  2
-
-typedef struct _zend_declarables {
-	zval ticks;
-} zend_declarables;
 
 typedef struct _zend_vm_stack *zend_vm_stack;
 typedef struct _zend_ini_entry zend_ini_entry;
@@ -92,8 +89,6 @@ struct _zend_compiler_globals {
 	zend_bool in_compilation;
 	zend_bool short_tags;
 
-	zend_declarables declarables;
-
 	zend_bool unclean_shutdown;
 
 	zend_bool ini_parser_unbuffered_errors;
@@ -105,23 +100,14 @@ struct _zend_compiler_globals {
 	uint32_t start_lineno;
 	zend_bool increment_lineno;
 
-	znode implementing_class;
-
 	zend_string *doc_comment;
 
 	uint32_t compiler_options; /* set of ZEND_COMPILE_* constants */
 
-	zend_string *current_namespace;
-	HashTable *current_import;
-	HashTable *current_import_function;
-	HashTable *current_import_const;
-	zend_bool  in_namespace;
-	zend_bool  has_bracketed_namespaces;
-
 	HashTable const_filenames;
 
-	zend_compiler_context context;
-	zend_stack context_stack;
+	zend_oparray_context context;
+	zend_file_context file_context;
 
 	zend_arena *arena;
 
@@ -237,6 +223,9 @@ struct _zend_executor_globals {
 	XPFPA_CW_DATATYPE saved_fpu_cw;
 #endif
 
+	zend_function trampoline;
+	zend_op       call_trampoline_op;
+
 	void *reserved[ZEND_MAX_RESERVED_RESOURCES];
 };
 
@@ -259,6 +248,12 @@ struct _zend_ini_scanner_globals {
 	/* Modes are: ZEND_INI_SCANNER_NORMAL, ZEND_INI_SCANNER_RAW, ZEND_INI_SCANNER_TYPED */
 	int scanner_mode;
 };
+
+typedef enum {
+	ON_TOKEN,
+	ON_FEEDBACK,
+	ON_STOP
+} zend_php_scanner_event;
 
 struct _zend_php_scanner_globals {
 	zend_file_handle *yy_in;
@@ -289,6 +284,9 @@ struct _zend_php_scanner_globals {
 
 	/* initial string length after scanning to first variable */
 	int scanned_string_len;
+
+	/* hooks */
+	void (* on_event)(zend_php_scanner_event event, int token, int line);
 };
 
 #endif /* ZEND_GLOBALS_H */

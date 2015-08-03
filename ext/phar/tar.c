@@ -102,7 +102,7 @@ int phar_is_tar(char *buf, char *fname) /* {{{ */
 	tar_header *header = (tar_header *) buf;
 	php_uint32 checksum = phar_tar_number(header->checksum, sizeof(header->checksum));
 	php_uint32 ret;
-	char save[sizeof(header->checksum)];
+	char save[sizeof(header->checksum)], *bname;
 
 	/* assume that the first filename in a tar won't begin with <?php */
 	if (!strncmp(buf, "<?php", sizeof("<?php")-1)) {
@@ -113,7 +113,10 @@ int phar_is_tar(char *buf, char *fname) /* {{{ */
 	memset(header->checksum, ' ', sizeof(header->checksum));
 	ret = (checksum == phar_tar_checksum(buf, 512));
 	memcpy(header->checksum, save, sizeof(header->checksum));
-	if (!ret && strstr(fname, ".tar")) {
+	if ((bname = strrchr(fname, PHP_DIR_SEPARATOR))) {
+		fname = bname;
+	}
+	if (!ret && (bname = strstr(fname, ".tar")) && (bname[4] == '\0' || bname[4] == '.')) {
 		/* probably a corrupted tar - so we will pretend it is one */
 		return 1;
 	}
@@ -254,6 +257,12 @@ int phar_parse_tarfile(php_stream* fp, char *fname, int fname_len, char *alias, 
 
 		size = entry.uncompressed_filesize = entry.compressed_filesize =
 			phar_tar_number(hdr->size, sizeof(hdr->size));
+
+		/* skip global/file headers (pax) */
+		if (!old && (hdr->typeflag == TAR_GLOBAL_HDR || hdr->typeflag == TAR_FILE_HDR)) {
+			size = (size+511)&~511;
+			goto next;
+		}
 
 		if (((!old && hdr->prefix[0] == 0) || old) && strlen(hdr->name) == sizeof(".phar/signature.bin")-1 && !strncmp(hdr->name, ".phar/signature.bin", sizeof(".phar/signature.bin")-1)) {
 			zend_off_t curloc;
@@ -425,7 +434,7 @@ bail:
 			entry.filename_len = i;
 			entry.filename = pestrndup(hdr->name, i, myphar->is_persistent);
 
-			if (entry.filename[entry.filename_len - 1] == '/') {
+			if (i > 0 && entry.filename[entry.filename_len - 1] == '/') {
 				/* some tar programs store directories with trailing slash */
 				entry.filename[entry.filename_len - 1] = '\0';
 				entry.filename_len--;
@@ -451,9 +460,7 @@ bail:
 		entry.flags = phar_tar_number(hdr->mode, sizeof(hdr->mode)) & PHAR_ENT_PERM_MASK;
 		entry.timestamp = phar_tar_number(hdr->mtime, sizeof(hdr->mtime));
 		entry.is_persistent = myphar->is_persistent;
-#ifndef S_ISDIR
-#define S_ISDIR(mode)	(((mode)&S_IFMT) == S_IFDIR)
-#endif
+
 		if (old && entry.tar_type == TAR_FILE && S_ISDIR(entry.flags)) {
 			entry.tar_type = TAR_DIR;
 		}
@@ -555,6 +562,7 @@ bail:
 		size = (size+511)&~511;
 
 		if (((hdr->typeflag == '\0') || (hdr->typeflag == TAR_FILE)) && size > 0) {
+next:
 			/* this is not good enough - seek succeeds even on truncated tars */
 			php_stream_seek(fp, size, SEEK_CUR);
 			if ((uint)php_stream_tell(fp) > totalsize) {
@@ -848,7 +856,7 @@ int phar_tar_setmetadata(zval *metadata, phar_entry_info *entry, char **error) /
 	PHP_VAR_SERIALIZE_INIT(metadata_hash);
 	php_var_serialize(&entry->metadata_str, metadata, &metadata_hash);
 	PHP_VAR_SERIALIZE_DESTROY(metadata_hash);
-	entry->uncompressed_filesize = entry->compressed_filesize = entry->metadata_str.s ? entry->metadata_str.s->len : 0;
+	entry->uncompressed_filesize = entry->compressed_filesize = entry->metadata_str.s ? ZSTR_LEN(entry->metadata_str.s) : 0;
 
 	if (entry->fp && entry->fp_type == PHAR_MOD) {
 		php_stream_close(entry->fp);
@@ -862,7 +870,7 @@ int phar_tar_setmetadata(zval *metadata, phar_entry_info *entry, char **error) /
 		spprintf(error, 0, "phar error: unable to create temporary file");
 		return -1;
 	}
-	if (entry->metadata_str.s->len != php_stream_write(entry->fp, entry->metadata_str.s->val, entry->metadata_str.s->len)) {
+	if (ZSTR_LEN(entry->metadata_str.s) != php_stream_write(entry->fp, ZSTR_VAL(entry->metadata_str.s), ZSTR_LEN(entry->metadata_str.s))) {
 		spprintf(error, 0, "phar tar error: unable to write metadata to magic metadata file \"%s\"", entry->filename);
 		zend_hash_str_del(&(entry->phar->manifest), entry->filename, entry->filename_len);
 		return ZEND_HASH_APPLY_STOP;
@@ -1009,8 +1017,8 @@ int phar_tar_flush(phar_archive_data *phar, char *user_stub, zend_long len, int 
 			{
 				zend_string *str = php_stream_copy_to_mem(stubfile, len, 0);
 				if (str) {
-					len = str->len;
-					user_stub = estrndup(str->val, str->len);
+					len = ZSTR_LEN(str);
+					user_stub = estrndup(ZSTR_VAL(str), ZSTR_LEN(str));
 					zend_string_release(str);
 				} else {
 					user_stub = NULL;

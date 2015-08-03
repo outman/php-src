@@ -36,39 +36,39 @@
 #define PHP_XPTR 2
 
 /* {{{ class entries */
-zend_class_entry *dom_node_class_entry;
-zend_class_entry *dom_domexception_class_entry;
-zend_class_entry *dom_domstringlist_class_entry;
-zend_class_entry *dom_namelist_class_entry;
-zend_class_entry *dom_domimplementationlist_class_entry;
-zend_class_entry *dom_domimplementationsource_class_entry;
-zend_class_entry *dom_domimplementation_class_entry;
-zend_class_entry *dom_documentfragment_class_entry;
-zend_class_entry *dom_document_class_entry;
-zend_class_entry *dom_nodelist_class_entry;
-zend_class_entry *dom_namednodemap_class_entry;
-zend_class_entry *dom_characterdata_class_entry;
-zend_class_entry *dom_attr_class_entry;
-zend_class_entry *dom_element_class_entry;
-zend_class_entry *dom_text_class_entry;
-zend_class_entry *dom_comment_class_entry;
-zend_class_entry *dom_typeinfo_class_entry;
-zend_class_entry *dom_userdatahandler_class_entry;
-zend_class_entry *dom_domerror_class_entry;
-zend_class_entry *dom_domerrorhandler_class_entry;
-zend_class_entry *dom_domlocator_class_entry;
-zend_class_entry *dom_domconfiguration_class_entry;
-zend_class_entry *dom_cdatasection_class_entry;
-zend_class_entry *dom_documenttype_class_entry;
-zend_class_entry *dom_notation_class_entry;
-zend_class_entry *dom_entity_class_entry;
-zend_class_entry *dom_entityreference_class_entry;
-zend_class_entry *dom_processinginstruction_class_entry;
-zend_class_entry *dom_string_extend_class_entry;
+PHP_DOM_EXPORT zend_class_entry *dom_node_class_entry;
+PHP_DOM_EXPORT zend_class_entry *dom_domexception_class_entry;
+PHP_DOM_EXPORT zend_class_entry *dom_domstringlist_class_entry;
+PHP_DOM_EXPORT zend_class_entry *dom_namelist_class_entry;
+PHP_DOM_EXPORT zend_class_entry *dom_domimplementationlist_class_entry;
+PHP_DOM_EXPORT zend_class_entry *dom_domimplementationsource_class_entry;
+PHP_DOM_EXPORT zend_class_entry *dom_domimplementation_class_entry;
+PHP_DOM_EXPORT zend_class_entry *dom_documentfragment_class_entry;
+PHP_DOM_EXPORT zend_class_entry *dom_document_class_entry;
+PHP_DOM_EXPORT zend_class_entry *dom_nodelist_class_entry;
+PHP_DOM_EXPORT zend_class_entry *dom_namednodemap_class_entry;
+PHP_DOM_EXPORT zend_class_entry *dom_characterdata_class_entry;
+PHP_DOM_EXPORT zend_class_entry *dom_attr_class_entry;
+PHP_DOM_EXPORT zend_class_entry *dom_element_class_entry;
+PHP_DOM_EXPORT zend_class_entry *dom_text_class_entry;
+PHP_DOM_EXPORT zend_class_entry *dom_comment_class_entry;
+PHP_DOM_EXPORT zend_class_entry *dom_typeinfo_class_entry;
+PHP_DOM_EXPORT zend_class_entry *dom_userdatahandler_class_entry;
+PHP_DOM_EXPORT zend_class_entry *dom_domerror_class_entry;
+PHP_DOM_EXPORT zend_class_entry *dom_domerrorhandler_class_entry;
+PHP_DOM_EXPORT zend_class_entry *dom_domlocator_class_entry;
+PHP_DOM_EXPORT zend_class_entry *dom_domconfiguration_class_entry;
+PHP_DOM_EXPORT zend_class_entry *dom_cdatasection_class_entry;
+PHP_DOM_EXPORT zend_class_entry *dom_documenttype_class_entry;
+PHP_DOM_EXPORT zend_class_entry *dom_notation_class_entry;
+PHP_DOM_EXPORT zend_class_entry *dom_entity_class_entry;
+PHP_DOM_EXPORT zend_class_entry *dom_entityreference_class_entry;
+PHP_DOM_EXPORT zend_class_entry *dom_processinginstruction_class_entry;
+PHP_DOM_EXPORT zend_class_entry *dom_string_extend_class_entry;
 #if defined(LIBXML_XPATH_ENABLED)
-zend_class_entry *dom_xpath_class_entry;
+PHP_DOM_EXPORT zend_class_entry *dom_xpath_class_entry;
 #endif
-zend_class_entry *dom_namespace_node_class_entry;
+PHP_DOM_EXPORT zend_class_entry *dom_namespace_node_class_entry;
 /* }}} */
 
 zend_object_handlers dom_object_handlers;
@@ -337,7 +337,7 @@ zval *dom_read_property(zval *object, zval *member, int type, void **cache_slot,
 	if (obj->prop_handler != NULL) {
 		hnd = zend_hash_find_ptr(obj->prop_handler, member_str);
 	} else if (instanceof_function(obj->std.ce, dom_node_class_entry)) {
-		php_error(E_WARNING, "Couldn't fetch %s. Node no longer exists", obj->std.ce->name->val);
+		php_error(E_WARNING, "Couldn't fetch %s. Node no longer exists", ZSTR_VAL(obj->std.ce->name));
 	}
 
 	if (hnd) {
@@ -614,7 +614,7 @@ PHP_MINIT_FUNCTION(dom)
 	zend_hash_init(&classes, 0, NULL, NULL, 1);
 
 	INIT_CLASS_ENTRY(ce, "DOMException", php_dom_domexception_class_functions);
-	dom_domexception_class_entry = zend_register_internal_class_ex(&ce, zend_exception_get_default());
+	dom_domexception_class_entry = zend_register_internal_class_ex(&ce, zend_ce_exception);
 	dom_domexception_class_entry->ce_flags |= ZEND_ACC_FINAL;
 	zend_declare_property_long(dom_domexception_class_entry, "code", sizeof("code")-1, 0, ZEND_ACC_PUBLIC);
 

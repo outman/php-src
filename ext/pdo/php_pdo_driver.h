@@ -527,11 +527,10 @@ static inline pdo_dbh_object_t *php_pdo_dbh_fetch_object(zend_object *obj) {
 
 /* describes a column */
 struct pdo_column_data {
-	char *name;
+	zend_string *name;
 	size_t maxlen;
 	zend_ulong precision;
 	enum pdo_param_type param_type;
-	size_t namelen;
 
 	/* don't touch this unless your name is dbdo */
 	void *dbdo_data;
@@ -687,8 +686,7 @@ PDO_API void pdo_raise_impl_error(pdo_dbh_t *dbh, pdo_stmt_t *stmt,
 PDO_API void php_pdo_dbh_addref(pdo_dbh_t *dbh);
 PDO_API void php_pdo_dbh_delref(pdo_dbh_t *dbh);
 
-PDO_API void php_pdo_stmt_addref(pdo_stmt_t *stmt);
-PDO_API void php_pdo_stmt_delref(pdo_stmt_t *stmt);
+PDO_API void php_pdo_free_statement(pdo_stmt_t *stmt);
 
 
 #endif /* PHP_PDO_DRIVER_H */

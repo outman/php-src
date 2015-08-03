@@ -29,7 +29,7 @@
 #include "zend_ini_scanner.h"
 #include "zend_extensions.h"
 
-#ifdef PHP_WIN32
+#ifdef ZEND_WIN32
 #include "win32/syslog.h"
 #endif
 
@@ -105,7 +105,7 @@ static void zend_ini_add_string(zval *result, zval *op1, zval *op2)
 	int op1_len = (int)Z_STRLEN_P(op1);
 	int length = op1_len + (int)Z_STRLEN_P(op2);
 
-	ZVAL_NEW_STR(result, zend_string_realloc(Z_STR_P(op1), length, 1));
+	ZVAL_NEW_STR(result, zend_string_extend(Z_STR_P(op1), length, 1));
 	memcpy(Z_STRVAL_P(result)+op1_len, Z_STRVAL_P(op2), Z_STRLEN_P(op2));
 	Z_STRVAL_P(result)[length] = 0;
 }
@@ -131,7 +131,7 @@ static void zend_ini_get_constant(zval *result, zval *name)
 		}
 		ZVAL_PSTRINGL(result, Z_STRVAL_P(c), Z_STRLEN_P(c));
 		if (c == &tmp) {
-			zval_dtor(&tmp);
+			zend_string_release(Z_STR(tmp));
 		}
 		zend_string_free(Z_STR_P(name));
 	} else {
@@ -179,7 +179,7 @@ static void ini_error(const char *msg)
 	}
 
 	if (CG(ini_parser_unbuffered_errors)) {
-#ifdef PHP_WIN32
+#ifdef ZEND_WIN32
 		syslog(LOG_ALERT, "PHP: %s (%s)", error_buf, GetCommandLine());
 #endif
 		fprintf(stderr, "PHP:  %s", error_buf);

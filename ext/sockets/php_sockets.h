@@ -35,6 +35,8 @@
 # include "windows_common.h"
 #endif
 
+#define PHP_SOCKETS_VERSION PHP_VERSION
+
 extern zend_module_entry sockets_module_entry;
 #define phpext_sockets_ptr &sockets_module_entry
 
@@ -90,13 +92,8 @@ ZEND_BEGIN_MODULE_GLOBALS(sockets)
 	char *strerror_buf;
 ZEND_END_MODULE_GLOBALS(sockets)
 
-#ifdef ZTS
-#define SOCKETS_G(v) ZEND_TSRMG(sockets_globals_id, zend_sockets_globals *, v)
-#else
-#define SOCKETS_G(v) (sockets_globals.v)
-#endif
-
 ZEND_EXTERN_MODULE_GLOBALS(sockets);
+#define SOCKETS_G(v) ZEND_MODULE_GLOBALS_ACCESSOR(sockets, v)
 
 enum sockopt_return {
 	SOCKOPT_ERROR,

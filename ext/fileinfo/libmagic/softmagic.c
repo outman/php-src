@@ -624,7 +624,6 @@ mprint(struct magic_set *ms, struct magic *m)
 		t = ms->offset + sizeof(double);
   		break;
 
-	case FILE_SEARCH:
 	case FILE_REGEX: {
 		char *cp;
 		int rval;
@@ -647,6 +646,15 @@ mprint(struct magic_set *ms, struct magic *m)
 			t = ms->search.offset + ms->search.rm_len;
 		break;
 	}
+
+	case FILE_SEARCH:
+		if (file_printf(ms, F(ms, m, "%s"), m->value.s) == -1)
+			return -1;
+		if ((m->str_flags & REGEX_OFFSET_START))
+			t = ms->search.offset;
+		else
+			t = ms->search.offset + m->vallen;
+		break;
 
 	case FILE_DEFAULT:
 	case FILE_CLEAR:
@@ -1081,7 +1089,7 @@ mcopy(struct magic_set *ms, union VALUETYPE *p, int type, int indir,
 			const char *last;	/* end of search region */
 			const char *buf;	/* start of search region */
 			const char *end;
-			size_t lines, linecnt, bytecnt, bytecnt_max;
+			size_t lines, linecnt, bytecnt;
 
 			if (s == NULL) {
 				ms->search.s_len = 0;
@@ -1089,24 +1097,26 @@ mcopy(struct magic_set *ms, union VALUETYPE *p, int type, int indir,
 				return 0;
 			}
 
-			if (m->str_flags & REGEX_LINE_COUNT) {
-				linecnt = m->str_range;
-				bytecnt = linecnt * 80;
-			} else {
-				linecnt = 0;
-				bytecnt = m->str_range;
+			/* bytecnt checks are to be kept for PHP, see cve-2014-3538.
+			 PCRE might get stuck if the input buffer is too big. */
+			linecnt = m->str_range;
+			bytecnt = linecnt * 80;
+
+			if (bytecnt == 0) {
+				bytecnt = 1 << 14;
 			}
 
-			/* XXX bytecnt_max is to be kept for PHP, see cve-2014-3538.
-				PCRE might stuck if the input buffer is too big. To ensure
-				the correctness, the check for bytecnt > nbytes is also
-				kept (might be abundant). */
-			bytecnt_max = nbytes - offset;
-			bytecnt_max = bytecnt_max > (1 << 14) ? (1 << 14) : bytecnt_max;
-			bytecnt_max = bytecnt > nbytes ? nbytes : bytecnt_max;
-			if (bytecnt == 0 || bytecnt > bytecnt_max)
-				bytecnt = bytecnt_max;
-
+			if (bytecnt > nbytes) {
+				bytecnt = nbytes;
+			}
+			if (offset > bytecnt) {
+				offset = bytecnt;
+			}
+			if (s == NULL) {
+				ms->search.s_len = 0;
+				ms->search.s = NULL;
+				return 0;
+			}
 			buf = RCAST(const char *, s) + offset;
 			end = last = RCAST(const char *, s) + bytecnt;
 			/* mget() guarantees buf <= last */
@@ -1642,7 +1652,7 @@ mget(struct magic_set *ms, const unsigned char *s, struct magic *m,
 		break;
 
 	case FILE_REGEX:
-		if (OFFSET_OOB(nbytes, offset, 0))
+		if (nbytes < offset)
 			return 0;
 		break;
 
@@ -1651,7 +1661,8 @@ mget(struct magic_set *ms, const unsigned char *s, struct magic *m,
 			offset += CAST(uint32_t, o);
 		if (offset == 0)
 			return 0;
-		if (OFFSET_OOB(nbytes, offset, 0))
+
+		if (nbytes < offset)
 			return 0;
 
 		if ((pb = file_push_buffer(ms)) == NULL)
@@ -1682,7 +1693,7 @@ mget(struct magic_set *ms, const unsigned char *s, struct magic *m,
 		return rv;
 
 	case FILE_USE:
-		if (OFFSET_OOB(nbytes, offset, 0))
+		if (nbytes < offset)
 			return 0;
 		rbuf = m->value.s;
 		if (*rbuf == '^') {
@@ -1801,29 +1812,29 @@ convert_libmagic_pattern(zval *pattern, char *val, int len, int options)
 
 	t = zend_string_alloc(len * 2 + 4, 0);
 
-	t->val[j++] = '~';
+	ZSTR_VAL(t)[j++] = '~';
 
 	for (i = 0; i < len; i++, j++) {
 		switch (val[i]) {
 			case '~':
-				t->val[j++] = '\\';
-				t->val[j] = '~';
+				ZSTR_VAL(t)[j++] = '\\';
+				ZSTR_VAL(t)[j] = '~';
 				break;
 			default:
-				t->val[j] = val[i];
+				ZSTR_VAL(t)[j] = val[i];
 				break;
 		}
 	}
-	t->val[j++] = '~';
+	ZSTR_VAL(t)[j++] = '~';
 
 	if (options & PCRE_CASELESS) 
-		t->val[j++] = 'i';
+		ZSTR_VAL(t)[j++] = 'i';
 
 	if (options & PCRE_MULTILINE)
-		t->val[j++] = 'm';
+		ZSTR_VAL(t)[j++] = 'm';
 
-	t->val[j]='\0';
-	t->len = j;
+	ZSTR_VAL(t)[j]='\0';
+	ZSTR_LEN(t) = j;
 
 	ZVAL_NEW_STR(pattern, t);
 }

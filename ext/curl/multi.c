@@ -116,7 +116,7 @@ void _php_curl_multi_cleanup_list(void *data) /* {{{ */
 		return;
 	}
 
-	zend_list_close(Z_RES_P(z_ch));
+	zend_list_delete(Z_RES_P(z_ch));
 }
 /* }}} */
 
@@ -151,7 +151,7 @@ PHP_FUNCTION(curl_multi_remove_handle)
 	}
 
 	RETVAL_LONG((zend_long)curl_multi_remove_handle(mh->multi, ch->cp));
-	zend_llist_del_element(&mh->easyh, &z_ch, (int (*)(void *, void *))curl_compare_resources);
+	zend_llist_del_element(&mh->easyh, z_ch, (int (*)(void *, void *))curl_compare_resources);
 
 }
 /* }}} */
@@ -235,7 +235,7 @@ PHP_FUNCTION(curl_multi_exec)
 		}
 	}
 
-	convert_to_long_ex(z_still_running);
+	convert_to_long(z_still_running);
 	still_running = Z_LVAL_P(z_still_running);
 	result = curl_multi_perform(mh->multi, &still_running);
 	ZVAL_LONG(z_still_running, still_running);
@@ -369,8 +369,9 @@ void _php_curl_multi_close(zend_resource *rsrc) /* {{{ */
 			pz_ch = (zval *)zend_llist_get_next_ex(&mh->easyh, &pos)) {
 			/* ptr is NULL means it already be freed */
 			if (Z_RES_P(pz_ch)->ptr) {
-				ch = (php_curl *) zend_fetch_resource(Z_RES_P(pz_ch), le_curl_name, le_curl);
-				_php_curl_verify_handlers(ch, 0);
+				if ((ch = (php_curl *) zend_fetch_resource(Z_RES_P(pz_ch), le_curl_name, le_curl))) {
+					_php_curl_verify_handlers(ch, 0);
+				}
 			}
 		}
 
@@ -416,8 +417,7 @@ static int _php_curl_multi_setopt(php_curlm *mh, zend_long option, zval *zvalue,
 #if LIBCURL_VERSION_NUM >= 0x071003 /* 7.16.3 */
 		case CURLMOPT_MAXCONNECTS:
 #endif
-			convert_to_long_ex(zvalue);
-			error = curl_multi_setopt(mh->multi, option, Z_LVAL_P(zvalue));
+			error = curl_multi_setopt(mh->multi, option, zval_get_long(zvalue));
 			break;
 
 		default:

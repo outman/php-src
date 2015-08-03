@@ -39,12 +39,7 @@ ZEND_API void ZEND_FASTCALL _zval_dtor_func(zend_refcounted *p ZEND_FILE_LINE_DC
 			}
 		case IS_ARRAY: {
 				zend_array *arr = (zend_array*)p;
-
 				ZEND_ASSERT(GC_REFCOUNT(arr) <= 1);
-
-				/* break possible cycles */
-				GC_TYPE(arr) = IS_NULL;
-				GC_REMOVE_FROM_BUFFER(arr);
 				zend_array_destroy(arr);
 				break;
 			}
@@ -97,9 +92,6 @@ ZEND_API void ZEND_FASTCALL _zval_dtor_func_for_ptr(zend_refcounted *p ZEND_FILE
 		case IS_ARRAY: {
 				zend_array *arr = (zend_array*)p;
 
-				/* break possible cycles */
-				GC_TYPE(arr) = IS_NULL;
-				GC_REMOVE_FROM_BUFFER(arr);
 				zend_array_destroy(arr);
 				break;
 			}
@@ -147,7 +139,7 @@ ZEND_API void _zval_internal_dtor(zval *zvalue ZEND_FILE_LINE_DC)
 		case IS_CONSTANT_AST:
 		case IS_OBJECT:
 		case IS_RESOURCE:
-			zend_error(E_CORE_ERROR, "Internal zval's can't be arrays, objects or resources");
+			zend_error_noreturn(E_CORE_ERROR, "Internal zval's can't be arrays, objects or resources");
 			break;
 		case IS_REFERENCE: {
 				zend_reference *ref = (zend_reference*)Z_REF_P(zvalue);
@@ -178,7 +170,7 @@ ZEND_API void _zval_internal_dtor_for_ptr(zval *zvalue ZEND_FILE_LINE_DC)
 		case IS_CONSTANT_AST:
 		case IS_OBJECT:
 		case IS_RESOURCE:
-			zend_error(E_CORE_ERROR, "Internal zval's can't be arrays, objects or resources");
+			zend_error_noreturn(E_CORE_ERROR, "Internal zval's can't be arrays, objects or resources");
 			break;
 		case IS_REFERENCE: {
 				zend_reference *ref = (zend_reference*)Z_REF_P(zvalue);
@@ -294,14 +286,14 @@ ZEND_API int zval_copy_static_var(zval *p, int num_args, va_list args, zend_hash
 				zend_hash_add_new(symbol_table, key->key, &tmp);
 				Z_ADDREF_P(p);
 			} else {
-				zend_error(E_NOTICE,"Undefined variable: %s", key->key->val);
+				zend_error(E_NOTICE,"Undefined variable: %s", ZSTR_VAL(key->key));
 			}
 		} else {
 			if (Z_TYPE_P(p) == IS_INDIRECT) {
 				p = Z_INDIRECT_P(p);
 				if (Z_TYPE_P(p) == IS_UNDEF) {
 					if (!is_ref) {
-						zend_error(E_NOTICE,"Undefined variable: %s", key->key->val);
+						zend_error(E_NOTICE,"Undefined variable: %s", ZSTR_VAL(key->key));
 						p = &tmp;
 						ZVAL_NULL(&tmp);
 					} else {

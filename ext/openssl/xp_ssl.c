@@ -255,7 +255,7 @@ static int handle_ssl_error(php_stream *stream, int nr_bytes, zend_bool is_init)
 							"SSL operation failed with code %d. %s%s",
 							err,
 							ebuf.s ? "OpenSSL Error messages:\n" : "",
-							ebuf.s ? ebuf.s->val : "");
+							ebuf.s ? ZSTR_VAL(ebuf.s) : "");
 					if (ebuf.s) {
 						smart_str_free(&ebuf);
 					}
@@ -313,7 +313,7 @@ static int php_x509_fingerprint_cmp(X509 *peer, const char *method, const char *
 
 	fingerprint = php_openssl_x509_fingerprint(peer, method, 0);
 	if (fingerprint) {
-		result = strcasecmp(expected, fingerprint->val);
+		result = strcasecmp(expected, ZSTR_VAL(fingerprint));
 		zend_string_release(fingerprint);
 	}
 
@@ -350,7 +350,7 @@ static zend_bool php_x509_fingerprint_match(X509 *peer, zval *val)
 				php_error_docref(NULL, E_WARNING, "Invalid peer_fingerprint array; [algo => fingerprint] form required");
 				return 0;
 			}
-			if (php_x509_fingerprint_cmp(peer, key->val, Z_STRVAL_P(current)) != 0) {
+			if (php_x509_fingerprint_cmp(peer, ZSTR_VAL(key), Z_STRVAL_P(current)) != 0) {
 				return 0;
 			}
 		} ZEND_HASH_FOREACH_END();
@@ -484,8 +484,7 @@ static int apply_peer_verification_policy(SSL *ssl, X509 *peer, php_stream *stre
 	int err,
 		must_verify_peer,
 		must_verify_peer_name,
-		must_verify_fingerprint,
-		has_cnmatch_ctx_opt;
+		must_verify_fingerprint;
 
 	php_openssl_netstream_data_t *sslsock = (php_openssl_netstream_data_t*)stream->abstract;
 
@@ -493,8 +492,7 @@ static int apply_peer_verification_policy(SSL *ssl, X509 *peer, php_stream *stre
 		? zend_is_true(val)
 		: sslsock->is_client;
 
-	has_cnmatch_ctx_opt = GET_VER_OPT("CN_match");
-	must_verify_peer_name = (has_cnmatch_ctx_opt || GET_VER_OPT("verify_peer_name"))
+	must_verify_peer_name = GET_VER_OPT("verify_peer_name")
 		? zend_is_true(val)
 		: sslsock->is_client;
 
@@ -549,12 +547,6 @@ static int apply_peer_verification_policy(SSL *ssl, X509 *peer, php_stream *stre
 	if (must_verify_peer_name) {
 		GET_VER_OPT_STRING("peer_name", peer_name);
 
-		if (has_cnmatch_ctx_opt) {
-			GET_VER_OPT_STRING("CN_match", peer_name);
-			php_error(E_DEPRECATED,
-				"the 'CN_match' SSL context option is deprecated in favor of 'peer_name'"
-			);
-		}
 		/* If no peer name was specified we use the autodetected url name in client environments */
 		if (peer_name == NULL && sslsock->is_client) {
 			peer_name = sslsock->url_name;
@@ -1397,7 +1389,7 @@ static int enable_server_sni(php_stream *stream, php_openssl_netstream_data_t *s
 				SSL_CTX_free(ctx);
 				return FAILURE;
 			} else {
-				sslsock->sni_certs[i].name = pestrdup(key->val, php_stream_is_persistent(stream));
+				sslsock->sni_certs[i].name = pestrdup(ZSTR_VAL(key), php_stream_is_persistent(stream));
 				sslsock->sni_certs[i].ctx = ctx;
 				++i;
 			}
@@ -1428,11 +1420,6 @@ static void enable_client_sni(php_stream *stream, php_openssl_netstream_data_t *
 	sni_server_name = sslsock->url_name;
 
 	GET_VER_OPT_STRING("peer_name", sni_server_name);
-
-	if (GET_VER_OPT("SNI_server_name")) {
-		GET_VER_OPT_STRING("SNI_server_name", sni_server_name);
-		php_error(E_DEPRECATED, "SNI_server_name is deprecated in favor of peer_name");
-	}
 
 	if (sni_server_name) {
 		SSL_set_tlsext_host_name(sslsock->ssl_handle, sni_server_name);
@@ -1959,7 +1946,7 @@ static size_t php_openssl_sockop_io(int read, php_stream *stream, char *buf, siz
 			timeout = &sslsock->s.timeout;
 		}
 
-		if (timeout && php_set_sock_blocking(sslsock->s.socket, 0 TSRMLS_CC) == SUCCESS) {
+		if (timeout && php_set_sock_blocking(sslsock->s.socket, 0) == SUCCESS) {
 			sslsock->s.is_blocked = 0;
 		}
 
@@ -2032,10 +2019,15 @@ static size_t php_openssl_sockop_io(int read, php_stream *stream, char *buf, siz
 					stream->eof = (retry == 0 && errno != EAGAIN && !SSL_pending(sslsock->ssl_handle));
 				}
 
+				/* Don't loop indefinitely in non-blocking mode if no data is available */
+				if (began_blocked == 0) {
+					break;
+				}
+
 				/* Now, if we have to wait some time, and we're supposed to be blocking, wait for the socket to become
 				 * available. Now, php_pollfd_for uses select to wait up to our time_left value only...
 				 */
-				if (retry && began_blocked) {
+				if (retry) {
 					if (read) {
 						php_pollfd_for(sslsock->s.socket, (err == SSL_ERROR_WANT_WRITE) ?
 							(POLLOUT|POLLPRI) : (POLLIN|POLLPRI), has_timeout ? &left_time : NULL);
@@ -2592,6 +2584,7 @@ php_stream *php_openssl_ssl_socket_factory(const char *proto, size_t protolen,
 		sslsock->method = STREAM_CRYPTO_METHOD_SSLv2_CLIENT;
 #else
 		php_error_docref(NULL, E_WARNING, "SSLv2 support is not compiled into the OpenSSL library against which PHP is linked");
+		php_stream_close(stream);
 		return NULL;
 #endif
 	} else if (strncmp(proto, "sslv3", protolen) == 0) {
@@ -2600,6 +2593,7 @@ php_stream *php_openssl_ssl_socket_factory(const char *proto, size_t protolen,
 		sslsock->method = STREAM_CRYPTO_METHOD_SSLv3_CLIENT;
 #else
 		php_error_docref(NULL, E_WARNING, "SSLv3 support is not compiled into the OpenSSL library against which PHP is linked");
+		php_stream_close(stream);
 		return NULL;
 #endif
 	} else if (strncmp(proto, "tls", protolen) == 0) {
@@ -2614,6 +2608,7 @@ php_stream *php_openssl_ssl_socket_factory(const char *proto, size_t protolen,
 		sslsock->method = STREAM_CRYPTO_METHOD_TLSv1_1_CLIENT;
 #else
 		php_error_docref(NULL, E_WARNING, "TLSv1.1 support is not compiled into the OpenSSL library against which PHP is linked");
+		php_stream_close(stream);
 		return NULL;
 #endif
 	} else if (strncmp(proto, "tlsv1.2", protolen) == 0) {
@@ -2622,6 +2617,7 @@ php_stream *php_openssl_ssl_socket_factory(const char *proto, size_t protolen,
 		sslsock->method = STREAM_CRYPTO_METHOD_TLSv1_2_CLIENT;
 #else
 		php_error_docref(NULL, E_WARNING, "TLSv1.2 support is not compiled into the OpenSSL library against which PHP is linked");
+		php_stream_close(stream);
 		return NULL;
 #endif
 	}

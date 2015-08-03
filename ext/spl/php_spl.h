@@ -22,6 +22,8 @@
 #include "php.h"
 #include <stdarg.h>
 
+#define PHP_SPL_VERSION PHP_VERSION
+
 #if 0
 #define SPL_DEBUG(x)	x
 #else
@@ -66,13 +68,8 @@ ZEND_BEGIN_MODULE_GLOBALS(spl)
 	int          autoload_running;
 ZEND_END_MODULE_GLOBALS(spl)
 
-#ifdef ZTS
-# define SPL_G(v) ZEND_TSRMG(spl_globals_id, zend_spl_globals *, v)
-extern int spl_globals_id;
-#else
-# define SPL_G(v) (spl_globals.v)
-extern zend_spl_globals spl_globals;
-#endif
+ZEND_EXTERN_MODULE_GLOBALS(spl);
+#define SPL_G(v) ZEND_MODULE_GLOBALS_ACCESSOR(spl, v)
 
 PHP_FUNCTION(spl_classes);
 PHP_FUNCTION(class_parents);

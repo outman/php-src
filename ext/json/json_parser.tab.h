@@ -76,7 +76,7 @@ union YYSTYPE
 
 	zval value;
 	struct {
-		zval key;
+		zend_string *key;
 		zval val;
 	} pair;
 

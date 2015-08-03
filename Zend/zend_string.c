@@ -38,8 +38,7 @@ ZEND_API zend_ulong zend_hash_func(const char *str, size_t len)
 static void _str_dtor(zval *zv)
 {
 	zend_string *str = Z_STR_P(zv);
-	GC_FLAGS(str) &= ~IS_STR_INTERNED;
-	GC_REFCOUNT(str) = 1;
+	pefree(str, GC_FLAGS(str) & IS_STR_PERSISTENT);
 }
 #endif
 
@@ -53,10 +52,11 @@ void zend_interned_strings_init(void)
 	CG(interned_strings).nTableMask = -CG(interned_strings).nTableSize;
 	HT_SET_DATA_ADDR(&CG(interned_strings), pemalloc(HT_SIZE(&CG(interned_strings)), 1));
 	HT_HASH_RESET(&CG(interned_strings));
+	CG(interned_strings).u.flags |= HASH_FLAG_INITIALIZED;
 
 	/* interned empty string */
 	str = zend_string_alloc(sizeof("")-1, 1);
-	str->val[0] = '\000';
+	ZSTR_VAL(str)[0] = '\000';
 	CG(empty_string) = zend_new_interned_string_int(str);
 #endif
 
@@ -83,7 +83,7 @@ static zend_string *zend_new_interned_string_int(zend_string *str)
 	uint idx;
 	Bucket *p;
 
-	if (IS_INTERNED(str)) {
+	if (ZSTR_IS_INTERNED(str)) {
 		return str;
 	}
 
@@ -92,8 +92,8 @@ static zend_string *zend_new_interned_string_int(zend_string *str)
 	idx = HT_HASH(&CG(interned_strings), nIndex);
 	while (idx != HT_INVALID_IDX) {
 		p = HT_HASH_TO_BUCKET(&CG(interned_strings), idx);
-		if ((p->h == h) && (p->key->len == str->len)) {
-			if (!memcmp(p->key->val, str->val, str->len)) {
+		if ((p->h == h) && (ZSTR_LEN(p->key) == ZSTR_LEN(str))) {
+			if (!memcmp(ZSTR_VAL(p->key), ZSTR_VAL(str), ZSTR_LEN(str))) {
 				zend_string_release(str);
 				return p->key;
 			}

@@ -1807,25 +1807,20 @@ PHP_METHOD(snmp, __construct)
 	zend_long retries = SNMP_DEFAULT_RETRIES;
 	zend_long version = SNMP_DEFAULT_VERSION;
 	int argc = ZEND_NUM_ARGS();
-	zend_error_handling error_handling;
 
 	snmp_object = Z_SNMP_P(object);
-	zend_replace_error_handling(EH_THROW, NULL, &error_handling);
 
-	if (zend_parse_parameters(argc, "lss|ll", &version, &a1, &a1_len, &a2, &a2_len, &timeout, &retries) == FAILURE) {
-		zend_restore_error_handling(&error_handling);
+	if (zend_parse_parameters_throw(argc, "lss|ll", &version, &a1, &a1_len, &a2, &a2_len, &timeout, &retries) == FAILURE) {
 		return;
 	}
 
-	zend_restore_error_handling(&error_handling);
-
-	switch(version) {
+	switch (version) {
 		case SNMP_VERSION_1:
 		case SNMP_VERSION_2c:
 		case SNMP_VERSION_3:
 			break;
 		default:
-			zend_throw_exception(zend_exception_get_default(), "Unknown SNMP protocol version", 0);
+			zend_throw_exception(zend_ce_exception, "Unknown SNMP protocol version", 0);
 			return;
 	}
 
@@ -2424,7 +2419,7 @@ PHP_MINIT_FUNCTION(snmp)
 #ifdef HAVE_SPL
 	php_snmp_exception_ce = zend_register_internal_class_ex(&cex, spl_ce_RuntimeException);
 #else
-	php_snmp_exception_ce = zend_register_internal_class_ex(&cex, zend_exception_get_default());
+	php_snmp_exception_ce = zend_register_internal_class_ex(&cex, zend_ce_exception);
 #endif
 
 	return SUCCESS;
@@ -2470,13 +2465,9 @@ static const zend_module_dep snmp_module_deps[] = {
 /* {{{ snmp_module_entry
  */
 zend_module_entry snmp_module_entry = {
-#if ZEND_MODULE_API_NO >= 20050922
 	STANDARD_MODULE_HEADER_EX,
 	NULL,
 	snmp_module_deps,
-#else
-	STANDARD_MODULE_HEADER,
-#endif
 	"snmp",
 	snmp_functions,
 	PHP_MINIT(snmp),

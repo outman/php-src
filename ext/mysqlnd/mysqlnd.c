@@ -487,25 +487,39 @@ mysqlnd_switch_to_ssl_if_needed(
 	}
 
 #ifdef MYSQLND_SSL_SUPPORTED
-	if ((greet_packet->server_capabilities & CLIENT_SSL) && (mysql_flags & CLIENT_SSL)) {
-		zend_bool verify = mysql_flags & CLIENT_SSL_VERIFY_SERVER_CERT? TRUE:FALSE;
-		DBG_INF("Switching to SSL");
-		if (!PACKET_WRITE(auth_packet, conn)) {
-			CONN_SET_STATE(conn, CONN_QUIT_SENT);
-			conn->m->send_close(conn);
-			SET_CLIENT_ERROR(*conn->error_info, CR_SERVER_GONE_ERROR, UNKNOWN_SQLSTATE, mysqlnd_server_gone);
-			goto end;
-		}
+	if (mysql_flags & CLIENT_SSL) {
+		zend_bool server_has_ssl = (greet_packet->server_capabilities & CLIENT_SSL)? TRUE:FALSE;
+		if (server_has_ssl == FALSE) {
+			goto close_conn;
+		} else {
+			zend_bool verify = mysql_flags & CLIENT_SSL_VERIFY_SERVER_CERT? TRUE:FALSE;
+			DBG_INF("Switching to SSL");
+			if (!PACKET_WRITE(auth_packet, conn)) {
+				goto close_conn;
+			}
 
-		conn->net->data->m.set_client_option(conn->net, MYSQL_OPT_SSL_VERIFY_SERVER_CERT, (const char *) &verify);
+			conn->net->data->m.set_client_option(conn->net, MYSQL_OPT_SSL_VERIFY_SERVER_CERT, (const char *) &verify);
 
-		if (FAIL == conn->net->data->m.enable_ssl(conn->net)) {
-			goto end;
+			if (FAIL == conn->net->data->m.enable_ssl(conn->net)) {
+				goto end;
+			}
 		}
+	}
+#else
+	auth_packet->client_flags &= ~CLIENT_SSL;
+	if (!PACKET_WRITE(auth_packet, conn)) {
+		goto close_conn;
 	}
 #endif
 	ret = PASS;
 end:
+	PACKET_FREE(auth_packet);
+	DBG_RETURN(ret);
+
+close_conn:
+	CONN_SET_STATE(conn, CONN_QUIT_SENT);
+	conn->m->send_close(conn);
+	SET_CLIENT_ERROR(*conn->error_info, CR_SERVER_GONE_ERROR, UNKNOWN_SQLSTATE, mysqlnd_server_gone);
 	PACKET_FREE(auth_packet);
 	DBG_RETURN(ret);
 }
@@ -1183,8 +1197,8 @@ MYSQLND_METHOD(mysqlnd_conn_data, query)(MYSQLND_CONN_DATA * conn, const char * 
 	DBG_INF_FMT("conn=%p conn=%llu query=%s", conn, conn->thread_id, query);
 
 	if (PASS == conn->m->local_tx_start(conn, this_func)) {
-		if (PASS == conn->m->send_query(conn, query, query_len) &&
-			PASS == conn->m->reap_query(conn))
+		if (PASS == conn->m->send_query(conn, query, query_len, MYSQLND_SEND_QUERY_IMPLICIT, NULL, NULL) &&
+			PASS == conn->m->reap_query(conn, MYSQLND_REAP_RESULT_IMPLICIT))
 		{
 			ret = PASS;
 			if (conn->last_query_type == QUERY_UPSERT && conn->upsert_status->affected_rows) {
@@ -1200,7 +1214,8 @@ MYSQLND_METHOD(mysqlnd_conn_data, query)(MYSQLND_CONN_DATA * conn, const char * 
 
 /* {{{ mysqlnd_conn_data::send_query */
 static enum_func_status
-MYSQLND_METHOD(mysqlnd_conn_data, send_query)(MYSQLND_CONN_DATA * conn, const char * query, unsigned int query_len)
+MYSQLND_METHOD(mysqlnd_conn_data, send_query)(MYSQLND_CONN_DATA * conn, const char * query, unsigned int query_len,
+											  enum_mysqlnd_send_query_type type, zval *read_cb, zval *err_cb)
 {
 	size_t this_func = STRUCT_OFFSET(struct st_mysqlnd_conn_data_methods, send_query);
 	enum_func_status ret = FAIL;
@@ -1210,8 +1225,8 @@ MYSQLND_METHOD(mysqlnd_conn_data, send_query)(MYSQLND_CONN_DATA * conn, const ch
 
 	if (PASS == conn->m->local_tx_start(conn, this_func)) {
 		ret = conn->m->simple_command(conn, COM_QUERY, (zend_uchar *) query, query_len,
-											 PROT_LAST /* we will handle the OK packet*/,
-											 FALSE, FALSE);
+									  PROT_LAST /* we will handle the OK packet*/,
+									  FALSE, FALSE);
 		if (PASS == ret) {
 			CONN_SET_STATE(conn, CONN_QUERY_SENT);
 		}
@@ -1225,7 +1240,7 @@ MYSQLND_METHOD(mysqlnd_conn_data, send_query)(MYSQLND_CONN_DATA * conn, const ch
 
 /* {{{ mysqlnd_conn_data::reap_query */
 static enum_func_status
-MYSQLND_METHOD(mysqlnd_conn_data, reap_query)(MYSQLND_CONN_DATA * conn)
+MYSQLND_METHOD(mysqlnd_conn_data, reap_query)(MYSQLND_CONN_DATA * conn, enum_mysqlnd_reap_result_type type)
 {
 	size_t this_func = STRUCT_OFFSET(struct st_mysqlnd_conn_data_methods, reap_query);
 	enum_mysqlnd_connection_state state = CONN_GET_STATE(conn);
@@ -1362,9 +1377,9 @@ static int mysqlnd_stream_array_from_fd_set(MYSQLND ** conn_array, fd_set * fds)
 #endif
 
 
-/* {{{ _mysqlnd_poll */
+/* {{{ mysqlnd_poll */
 PHPAPI enum_func_status
-_mysqlnd_poll(MYSQLND **r_array, MYSQLND **e_array, MYSQLND ***dont_poll, long sec, long usec, int * desc_num)
+mysqlnd_poll(MYSQLND **r_array, MYSQLND **e_array, MYSQLND ***dont_poll, long sec, long usec, int * desc_num)
 {
 	struct timeval	tv;
 	struct timeval *tv_p = NULL;
@@ -1749,7 +1764,7 @@ MYSQLND_METHOD(mysqlnd_conn_data, statistic)(MYSQLND_CONN_DATA * conn, zend_stri
 			if (PASS == (ret = PACKET_READ(stats_header, conn))) {
 				/* will be freed by Zend, thus don't use the mnd_ allocator */
 				*message = zend_string_init(stats_header->message, stats_header->message_len, 0);
-				DBG_INF((*message)->val);
+				DBG_INF(ZSTR_VAL(*message));
 			}
 			PACKET_FREE(stats_header);
 		} while (0);
@@ -2053,7 +2068,7 @@ MYSQLND_METHOD(mysqlnd_conn_data, info)(const MYSQLND_CONN_DATA * const conn)
 /* {{{ mysqlnd_get_client_info */
 PHPAPI const char * mysqlnd_get_client_info()
 {
-	return MYSQLND_VERSION;
+	return PHP_MYSQLND_VERSION;
 }
 /* }}} */
 
@@ -2664,24 +2679,24 @@ static void
 MYSQLND_METHOD(mysqlnd_conn_data, tx_cor_options_to_string)(const MYSQLND_CONN_DATA * const conn, smart_str * str, const unsigned int mode)
 {
 	if (mode & TRANS_COR_AND_CHAIN && !(mode & TRANS_COR_AND_NO_CHAIN)) {
-		if (str->s && str->s->len) {
+		if (str->s && ZSTR_LEN(str->s)) {
 			smart_str_appendl(str, " ", sizeof(" ") - 1);
 		}
 		smart_str_appendl(str, "AND CHAIN", sizeof("AND CHAIN") - 1);
 	} else if (mode & TRANS_COR_AND_NO_CHAIN && !(mode & TRANS_COR_AND_CHAIN)) {
-		if (str->s && str->s->len) {
+		if (str->s && ZSTR_LEN(str->s)) {
 			smart_str_appendl(str, " ", sizeof(" ") - 1);
 		}
 		smart_str_appendl(str, "AND NO CHAIN", sizeof("AND NO CHAIN") - 1);
 	}
 
 	if (mode & TRANS_COR_RELEASE && !(mode & TRANS_COR_NO_RELEASE)) {
-		if (str->s && str->s->len) {
+		if (str->s && ZSTR_LEN(str->s)) {
 			smart_str_appendl(str, " ", sizeof(" ") - 1);
 		}
 		smart_str_appendl(str, "RELEASE", sizeof("RELEASE") - 1);
 	} else if (mode & TRANS_COR_NO_RELEASE && !(mode & TRANS_COR_RELEASE)) {
-		if (str->s && str->s->len) {
+		if (str->s && ZSTR_LEN(str->s)) {
 			smart_str_appendl(str, " ", sizeof(" ") - 1);
 		}
 		smart_str_appendl(str, "NO RELEASE", sizeof("NO RELEASE") - 1);
@@ -2755,7 +2770,7 @@ MYSQLND_METHOD(mysqlnd_conn_data, tx_commit_or_rollback)(MYSQLND_CONN_DATA * con
 				char * name_esc = mysqlnd_escape_string_for_tx_name_in_comment(name);
 
 				query_len = mnd_sprintf(&query, 0, (commit? "COMMIT%s %s":"ROLLBACK%s %s"),
-										name_esc? name_esc:"", tmp_str.s? tmp_str.s->val:"");
+										name_esc? name_esc:"", tmp_str.s? ZSTR_VAL(tmp_str.s):"");
 				smart_str_free(&tmp_str);
 				if (name_esc) {
 					mnd_efree(name_esc);
@@ -2802,12 +2817,12 @@ MYSQLND_METHOD(mysqlnd_conn_data, tx_begin)(MYSQLND_CONN_DATA * conn, const unsi
 					smart_str_free(&tmp_str);
 					break;
 				} else if (mode & TRANS_START_READ_WRITE) {
-					if (tmp_str.s && tmp_str.s->len) {
+					if (tmp_str.s && ZSTR_LEN(tmp_str.s)) {
 						smart_str_appendl(&tmp_str, ", ", sizeof(", ") - 1);
 					}
 					smart_str_appendl(&tmp_str, "READ WRITE", sizeof("READ WRITE") - 1);
 				} else if (mode & TRANS_START_READ_ONLY) {
-					if (tmp_str.s && tmp_str.s->len) {
+					if (tmp_str.s && ZSTR_LEN(tmp_str.s)) {
 						smart_str_appendl(&tmp_str, ", ", sizeof(", ") - 1);
 					}
 					smart_str_appendl(&tmp_str, "READ ONLY", sizeof("READ ONLY") - 1);
@@ -2818,7 +2833,7 @@ MYSQLND_METHOD(mysqlnd_conn_data, tx_begin)(MYSQLND_CONN_DATA * conn, const unsi
 			{
 				char * name_esc = mysqlnd_escape_string_for_tx_name_in_comment(name);
 				char * query;
-				unsigned int query_len = mnd_sprintf(&query, 0, "START TRANSACTION%s %s", name_esc? name_esc:"", tmp_str.s? tmp_str.s->val:"");
+				unsigned int query_len = mnd_sprintf(&query, 0, "START TRANSACTION%s %s", name_esc? name_esc:"", tmp_str.s? ZSTR_VAL(tmp_str.s):"");
 				smart_str_free(&tmp_str);
 				if (name_esc) {
 					mnd_efree(name_esc);
@@ -3138,9 +3153,9 @@ MYSQLND_CLASS_METHODS_START(mysqlnd_conn)
 MYSQLND_CLASS_METHODS_END;
 
 
-/* {{{ _mysqlnd_init */
+/* {{{ mysqlnd_init */
 PHPAPI MYSQLND *
-_mysqlnd_init(unsigned int flags, zend_bool persistent)
+mysqlnd_init(unsigned int flags, zend_bool persistent)
 {
 	MYSQLND * ret;
 	DBG_ENTER("mysqlnd_init");

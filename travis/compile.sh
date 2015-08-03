@@ -21,7 +21,7 @@ $TS \
 --with-pdo-pgsql \
 --with-pdo-sqlite \
 --enable-intl \
---without-pear \
+--with-pear \
 --with-gd \
 --with-jpeg-dir=/usr \
 --with-png-dir=/usr \
@@ -57,7 +57,6 @@ $TS \
 --with-imap \
 --with-imap-ssl \
 --with-freetype-dir=/usr \
---with-t1lib=/usr \
 --with-xpm-dir=/usr \
 --with-kerberos \
 --enable-sysvmsg 

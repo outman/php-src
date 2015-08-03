@@ -401,13 +401,14 @@ if test -r "/dev/urandom" && test -c "/dev/urandom"; then
   AC_MSG_RESULT(yes) 
 else 
   AC_MSG_RESULT(no) 
-  AC_MSG_CHECKING(whether /dev/arandom exists) 
-  if test -r "/dev/arandom" && test -c "/dev/arandom"; then 
-    AC_DEFINE([HAVE_DEV_ARANDOM], 1, [Define if the target system has /dev/arandom device])
-    AC_MSG_RESULT(yes) 
-  else 
-    AC_MSG_RESULT(no) 
-  fi 
+fi
+
+AC_MSG_CHECKING(whether /dev/arandom exists) 
+if test -r "/dev/arandom" && test -c "/dev/arandom"; then 
+  AC_DEFINE([HAVE_DEV_ARANDOM], 1, [Define if the target system has /dev/arandom device])
+  AC_MSG_RESULT(yes) 
+else 
+  AC_MSG_RESULT(no) 
 fi 
 
 AC_ARG_ENABLE(gcc-global-regs,
@@ -421,6 +422,11 @@ AC_MSG_CHECKING(for global register variables support)
 if test "$ZEND_GCC_GLOBAL_REGS" != "no"; then
   AC_TRY_COMPILE([
   ],[
+#if defined(__GNUC__)
+# define ZEND_GCC_VERSION (__GNUC__ * 1000 + __GNUC_MINOR__)
+#else
+# define ZEND_GCC_VERSION 0
+#endif
 #if defined(__GNUC__) && ZEND_GCC_VERSION >= 4008 && defined(i386)
 # define ZEND_VM_FP_GLOBAL_REG "%esi"
 # define ZEND_VM_IP_GLOBAL_REG "%edi"
@@ -456,4 +462,4 @@ if test "$ZEND_GCC_GLOBAL_REGS" = "yes"; then
 else
   HAVE_GCC_GLOBAL_REGS=no
 fi
-AC_MSG_RESULT(ZEND_GCC_GLOBAL_REGS)
+AC_MSG_RESULT($ZEND_GCC_GLOBAL_REGS)

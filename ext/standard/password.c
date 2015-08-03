@@ -87,19 +87,19 @@ static int php_password_salt_to64(const char *str, const size_t str_len, const s
 		return FAILURE;
 	}
 	buffer = php_base64_encode((unsigned char*) str, str_len);
-	if (buffer->len < out_len) {
+	if (ZSTR_LEN(buffer) < out_len) {
 		/* Too short of an encoded string generated */
 		zend_string_release(buffer);
 		return FAILURE;
 	}
 	for (pos = 0; pos < out_len; pos++) {
-		if (buffer->val[pos] == '+') {
+		if (ZSTR_VAL(buffer)[pos] == '+') {
 			ret[pos] = '.';
-		} else if (buffer->val[pos] == '=') {
+		} else if (ZSTR_VAL(buffer)[pos] == '=') {
 			zend_string_free(buffer);
 			return FAILURE;
 		} else {
-			ret[pos] = buffer->val[pos];
+			ret[pos] = ZSTR_VAL(buffer)[pos];
 		}
 	}
 	zend_string_free(buffer);
@@ -231,16 +231,8 @@ PHP_FUNCTION(password_needs_rehash)
 			{
 				zend_long new_cost = PHP_PASSWORD_BCRYPT_COST, cost = 0;
 
-				if (options && (option_buffer = zend_symtable_str_find(options, "cost", sizeof("cost")-1)) != NULL) {
-					if (Z_TYPE_P(option_buffer) != IS_LONG) {
-						zval cast_option_buffer;
-						ZVAL_DUP(&cast_option_buffer, option_buffer);
-						convert_to_long(&cast_option_buffer);
-						new_cost = Z_LVAL(cast_option_buffer);
-						zval_dtor(&cast_option_buffer);
-					} else {
-						new_cost = Z_LVAL_P(option_buffer);
-					}
+				if (options && (option_buffer = zend_hash_str_find(options, "cost", sizeof("cost")-1)) != NULL) {
+					new_cost = zval_get_long(option_buffer);
 				}
 
 				sscanf(hash, "$2y$" ZEND_LONG_FMT "$", &cost);
@@ -268,11 +260,11 @@ PHP_FUNCTION(password_verify)
 	if (zend_parse_parameters(ZEND_NUM_ARGS(), "ss", &password, &password_len, &hash, &hash_len) == FAILURE) {
 		RETURN_FALSE;
 	}
-	if ((ret = php_crypt(password, (int)password_len, hash, (int)hash_len)) == NULL) {
+	if ((ret = php_crypt(password, (int)password_len, hash, (int)hash_len, 1)) == NULL) {
 		RETURN_FALSE;
 	}
 
-	if (ret->len != hash_len || hash_len < 13) {
+	if (ZSTR_LEN(ret) != hash_len || hash_len < 13) {
 		zend_string_free(ret);
 		RETURN_FALSE;
 	}
@@ -282,7 +274,7 @@ PHP_FUNCTION(password_verify)
 	 * equality check that will always check every byte of both
 	 * values. */
 	for (i = 0; i < hash_len; i++) {
-		status |= (ret->val[i] ^ hash[i]);
+		status |= (ZSTR_VAL(ret)[i] ^ hash[i]);
 	}
 
 	zend_string_free(ret);
@@ -314,16 +306,8 @@ PHP_FUNCTION(password_hash)
 		{
 			zend_long cost = PHP_PASSWORD_BCRYPT_COST;
 
-			if (options && (option_buffer = zend_symtable_str_find(options, "cost", sizeof("cost")-1)) != NULL) {
-				if (Z_TYPE_P(option_buffer) != IS_LONG) {
-					zval cast_option_buffer;
-					ZVAL_DUP(&cast_option_buffer, option_buffer);
-					convert_to_long(&cast_option_buffer);
-					cost = Z_LVAL(cast_option_buffer);
-					zval_dtor(&cast_option_buffer);
-				} else {
-					cost = Z_LVAL_P(option_buffer);
-				}
+			if (options && (option_buffer = zend_hash_str_find(options, "cost", sizeof("cost")-1)) != NULL) {
+				cost = zval_get_long(option_buffer);
 			}
 
 			if (cost < 4 || cost > 31) {
@@ -343,9 +327,12 @@ PHP_FUNCTION(password_hash)
 			RETURN_NULL();
 	}
 
-	if (options && (option_buffer = zend_symtable_str_find(options, "salt", sizeof("salt")-1)) != NULL) {
+	if (options && (option_buffer = zend_hash_str_find(options, "salt", sizeof("salt")-1)) != NULL) {
 		char *buffer;
 		size_t buffer_len = 0;
+
+		php_error_docref(NULL, E_DEPRECATED, "Use of the 'salt' option to password_hash is deprecated");
+
 		switch (Z_TYPE_P(option_buffer)) {
 			case IS_STRING:
 				buffer = estrndup(Z_STRVAL_P(option_buffer), Z_STRLEN_P(option_buffer));
@@ -353,18 +340,13 @@ PHP_FUNCTION(password_hash)
 				break;
 			case IS_LONG:
 			case IS_DOUBLE:
-			case IS_OBJECT: {
-				zval cast_option_buffer;
-
-				ZVAL_DUP(&cast_option_buffer, option_buffer);
-				convert_to_string(&cast_option_buffer);
-				if (Z_TYPE(cast_option_buffer) == IS_STRING) {
-					buffer = estrndup(Z_STRVAL(cast_option_buffer), Z_STRLEN(cast_option_buffer));
-					buffer_len = Z_STRLEN(cast_option_buffer);
-					zval_dtor(&cast_option_buffer);
-					break;
-				}
-				zval_dtor(&cast_option_buffer);
+			case IS_OBJECT:
+			{
+				zend_string *tmp = zval_get_string(option_buffer);
+				buffer = estrndup(ZSTR_VAL(tmp), ZSTR_LEN(tmp));
+				buffer_len = ZSTR_LEN(tmp);
+				zend_string_release(tmp);
+				break;
 			}
 			case IS_FALSE:
 			case IS_TRUE:
@@ -428,14 +410,14 @@ PHP_FUNCTION(password_hash)
 	/* This cast is safe, since both values are defined here in code and cannot overflow */
 	hash_len = (int) (hash_format_len + salt_len);
 
-	if ((result = php_crypt(password, (int)password_len, hash, hash_len)) == NULL) {
+	if ((result = php_crypt(password, (int)password_len, hash, hash_len, 1)) == NULL) {
 		efree(hash);
 		RETURN_FALSE;
 	}
 
 	efree(hash);
 
-	if (result->len < 13) {
+	if (ZSTR_LEN(result) < 13) {
 		zend_string_free(result);
 		RETURN_FALSE;
 	}

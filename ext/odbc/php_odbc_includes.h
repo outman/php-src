@@ -281,16 +281,26 @@ void odbc_sql_error(ODBC_SQL_ERROR_PARAMS);
 
 #if defined(ODBCVER) && (ODBCVER >= 0x0300)
 #define IS_SQL_LONG(x) (x == SQL_LONGVARBINARY || x == SQL_LONGVARCHAR || x == SQL_WLONGVARCHAR)
+
+#define PHP_ODBC_SQLCOLATTRIBUTE SQLColAttribute
+#define PHP_ODBC_SQLALLOCSTMT(hdbc, phstmt) SQLAllocHandle(SQL_HANDLE_STMT, hdbc, phstmt)
+
+#define PHP_ODBC_SQL_DESC_NAME SQL_DESC_NAME
 #else
 #define IS_SQL_LONG(x) (x == SQL_LONGVARBINARY || x == SQL_LONGVARCHAR)
+
+#define PHP_ODBC_SQLCOLATTRIBUTE SQLColAttributes
+#define PHP_ODBC_SQLALLOCSTMT SQLAllocStmt
+
+#define PHP_ODBC_SQL_DESC_NAME SQL_COLUMN_NAME
 #endif
 #define IS_SQL_BINARY(x) (x == SQL_BINARY || x == SQL_VARBINARY || x == SQL_LONGVARBINARY)
 
-#ifdef ZTS
-# define ODBCG(v) TSRMG(odbc_globals_id, zend_odbc_globals *, v)
-#else
-# define ODBCG(v) (odbc_globals.v)
-extern ZEND_API zend_odbc_globals odbc_globals;
+PHP_ODBC_API ZEND_EXTERN_MODULE_GLOBALS(odbc)
+#define ODBCG(v) ZEND_MODULE_GLOBALS_ACCESSOR(odbc, v)
+
+#if defined(ZTS) && defined(COMPILE_DL_ODBC)
+ZEND_TSRMLS_CACHE_EXTERN();
 #endif
 
 #endif /* HAVE_UODBC */

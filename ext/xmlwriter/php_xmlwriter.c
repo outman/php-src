@@ -112,7 +112,7 @@ static void xmlwriter_free_resource_ptr(xmlwriter_object *intern)
 		ze_xmlwriter_object *obj = Z_XMLWRITER_P(object); \
 		intern = obj->xmlwriter_ptr; \
 		if (!intern) { \
-			php_error_docref(NULL, E_WARNING, "Invalid or unitialized XMLWriter object"); \
+			php_error_docref(NULL, E_WARNING, "Invalid or uninitialized XMLWriter object"); \
 			RETURN_FALSE; \
 		} \
 	}
@@ -664,7 +664,7 @@ zend_module_entry xmlwriter_module_entry = {
 	NULL,
 	NULL,
 	PHP_MINFO(xmlwriter),
-	"0.1",
+	PHP_XMLWRITER_VERSION,
 	STANDARD_MODULE_PROPERTIES
 };
 /* }}} */
@@ -1672,7 +1672,7 @@ static PHP_FUNCTION(xmlwriter_write_dtd_entity)
 /* }}} */
 #endif
 
-/* {{{ proto resource xmlwriter_open_uri(resource xmlwriter, string source)
+/* {{{ proto resource xmlwriter_open_uri(string source)
 Create new xmlwriter using source uri for output */
 static PHP_FUNCTION(xmlwriter_open_uri)
 {
@@ -1685,7 +1685,7 @@ static PHP_FUNCTION(xmlwriter_open_uri)
 	zval *self = getThis();
 	ze_xmlwriter_object *ze_obj = NULL;
 
-	if (zend_parse_parameters(ZEND_NUM_ARGS(), "s", &source, &source_len) == FAILURE) {
+	if (zend_parse_parameters(ZEND_NUM_ARGS(), "p", &source, &source_len) == FAILURE) {
 		return;
 	}
 

@@ -124,7 +124,7 @@ php_stream *php_stream_url_wrap_http_ex(php_stream_wrapper *wrapper,
 	size_t scratch_len = 0;
 	int body = 0;
 	char location[HTTP_HEADER_BLOCK_SIZE];
-	zval *response_header = NULL;
+	zval response_header;
 	int reqok = 0;
 	char *http_header_line = NULL;
 	char tmp_line[128];
@@ -146,6 +146,7 @@ php_stream *php_stream_url_wrap_http_ex(php_stream_wrapper *wrapper,
 	int response_code;
 	zend_array *symbol_table;
 
+	ZVAL_UNDEF(&response_header);
 	tmp_line[0] = '\0';
 
 	if (redirect_max < 1) {
@@ -228,7 +229,7 @@ php_stream *php_stream_url_wrap_http_ex(php_stream_wrapper *wrapper,
 	}
 
 	if (errstr) {
-		php_stream_wrapper_log_error(wrapper, options, "%s", errstr->val);
+		php_stream_wrapper_log_error(wrapper, options, "%s", ZSTR_VAL(errstr));
 		zend_string_release(errstr);
 		errstr = NULL;
 	}
@@ -309,7 +310,7 @@ php_stream *php_stream_url_wrap_http_ex(php_stream_wrapper *wrapper,
 finish:
 		smart_str_appendl(&header, "\r\n", sizeof("\r\n")-1);
 
-		if (php_stream_write(stream, header.s->val, header.s->len) != header.s->len) {
+		if (php_stream_write(stream, ZSTR_VAL(header.s), ZSTR_LEN(header.s)) != ZSTR_LEN(header.s)) {
 			php_stream_wrapper_log_error(wrapper, options, "Cannot connect to HTTPS server through proxy");
 			php_stream_close(stream);
 			stream = NULL;
@@ -447,22 +448,22 @@ finish:
 			/* Remove newlines and spaces from start and end php_trim will estrndup() */
 			tmp = php_trim(Z_STR_P(tmpzval), NULL, 0, 3);
 		}
-		if (tmp && tmp->len) {
+		if (tmp && ZSTR_LEN(tmp)) {
 			char *s;
 			char *t;
 
-			user_headers = estrndup(tmp->val, tmp->len);
+			user_headers = estrndup(ZSTR_VAL(tmp), ZSTR_LEN(tmp));
 
-			if (IS_INTERNED(tmp)) {
-				tmp = zend_string_init(tmp->val, tmp->len, 0);
+			if (ZSTR_IS_INTERNED(tmp)) {
+				tmp = zend_string_init(ZSTR_VAL(tmp), ZSTR_LEN(tmp), 0);
 			} else if (GC_REFCOUNT(tmp) > 1) {
 				GC_REFCOUNT(tmp)--;
-				tmp = zend_string_init(tmp->val, tmp->len, 0);
+				tmp = zend_string_init(ZSTR_VAL(tmp), ZSTR_LEN(tmp), 0);
 			}
 
 			/* Make lowercase for easy comparison against 'standard' headers */
-			php_strtolower(tmp->val, tmp->len);
-			t = tmp->val;
+			php_strtolower(ZSTR_VAL(tmp), ZSTR_LEN(tmp));
+			t = ZSTR_VAL(tmp);
 
 			if (!header_init) {
 				/* strip POST headers on redirect */
@@ -551,7 +552,7 @@ finish:
 
 		stmp = php_base64_encode((unsigned char*)scratch, strlen(scratch));
 
-		if (snprintf(scratch, scratch_len, "Authorization: Basic %s\r\n", stmp->val) > 0) {
+		if (snprintf(scratch, scratch_len, "Authorization: Basic %s\r\n", ZSTR_VAL(stmp)) > 0) {
 			php_stream_write(stream, scratch, strlen(scratch));
 			php_stream_notify_info(context, PHP_STREAM_NOTIFY_AUTH_REQUIRED, NULL, 0);
 		}
@@ -669,7 +670,15 @@ finish:
 		zend_set_local_var_str("http_response_header", sizeof("http_response_header")-1, &ztmp, 0);
 	}
 
-	response_header = zend_hash_str_find_ind(symbol_table, "http_response_header", sizeof("http_response_header")-1);
+	{
+		zval *response_header_ptr = zend_hash_str_find_ind(symbol_table, "http_response_header", sizeof("http_response_header")-1);
+		if (!response_header_ptr || Z_TYPE_P(response_header_ptr) != IS_ARRAY) {
+			ZVAL_UNDEF(&response_header);
+			goto out;
+		} else {
+			ZVAL_COPY(&response_header, response_header_ptr);
+		}
+	}
 
 	if (!php_stream_eof(stream)) {
 		size_t tmp_line_len;
@@ -717,7 +726,7 @@ finish:
 				}
 			}
 			ZVAL_STRINGL(&http_response, tmp_line, tmp_line_len);
-			zend_hash_next_index_insert(Z_ARRVAL_P(response_header), &http_response);
+			zend_hash_next_index_insert(Z_ARRVAL(response_header), &http_response);
 		}
 	} else {
 		php_stream_wrapper_log_error(wrapper, options, "HTTP request failed, unexpected end of socket!");
@@ -790,7 +799,7 @@ finish:
 
 				ZVAL_STRINGL(&http_header, http_header_line, http_header_line_length);
 
-				zend_hash_next_index_insert(Z_ARRVAL_P(response_header), &http_header);
+				zend_hash_next_index_insert(Z_ARRVAL(response_header), &http_header);
 			}
 		} else {
 			break;
@@ -904,7 +913,7 @@ out:
 
 	if (stream) {
 		if (header_init) {
-			ZVAL_COPY(&stream->wrapperdata, response_header);
+			ZVAL_COPY(&stream->wrapperdata, &response_header);
 		}
 		php_stream_notify_progress_init(context, 0, file_size);
 
@@ -925,9 +934,13 @@ out:
 		if (transfer_encoding) {
 			php_stream_filter_append(&stream->readfilters, transfer_encoding);
 		}
-	} else if (transfer_encoding) {
-		php_stream_filter_free(transfer_encoding);
+	} else {
+		if (transfer_encoding) {
+			php_stream_filter_free(transfer_encoding);
+		}
 	}
+
+	zval_ptr_dtor(&response_header);
 
 	return stream;
 }

@@ -65,20 +65,16 @@ const zend_function_entry php_dom_text_class_functions[] = {
 PHP_METHOD(domtext, __construct)
 {
 
-	zval *id;
+	zval *id = getThis();
 	xmlNodePtr nodep = NULL, oldnode = NULL;
 	dom_object *intern;
 	char *value = NULL;
 	size_t value_len;
-	zend_error_handling error_handling;
 
-	zend_replace_error_handling(EH_THROW, dom_domexception_class_entry, &error_handling);
-	if (zend_parse_method_parameters(ZEND_NUM_ARGS(), getThis(), "O|s", &id, dom_text_class_entry, &value, &value_len) == FAILURE) {
-		zend_restore_error_handling(&error_handling);
+	if (zend_parse_parameters_throw(ZEND_NUM_ARGS(), "|s", &value, &value_len) == FAILURE) {
 		return;
 	}
 
-	zend_restore_error_handling(&error_handling);
 	nodep = xmlNewText((xmlChar *) value);
 
 	if (!nodep) {
@@ -137,7 +133,7 @@ int dom_text_whole_text_read(dom_object *obj, zval *retval)
 
 /* }}} */
 
-/* {{{ proto DOMText dom_text_split_text(int offset);
+/* {{{ proto DOMText dom_text_split_text(int offset)
 URL: http://www.w3.org/TR/2003/WD-DOM-Level-3-Core-20030226/DOM3-Core.html#core-ID-38853C1D
 Since:
 */
@@ -198,7 +194,7 @@ PHP_FUNCTION(dom_text_split_text)
 }
 /* }}} end dom_text_split_text */
 
-/* {{{ proto boolean dom_text_is_whitespace_in_element_content();
+/* {{{ proto boolean dom_text_is_whitespace_in_element_content()
 URL: http://www.w3.org/TR/2003/WD-DOM-Level-3-Core-20030226/DOM3-Core.html#core-Text3-isWhitespaceInElementContent
 Since: DOM Level 3
 */
@@ -221,7 +217,7 @@ PHP_FUNCTION(dom_text_is_whitespace_in_element_content)
 }
 /* }}} end dom_text_is_whitespace_in_element_content */
 
-/* {{{ proto DOMText dom_text_replace_whole_text(string content);
+/* {{{ proto DOMText dom_text_replace_whole_text(string content)
 URL: http://www.w3.org/TR/2003/WD-DOM-Level-3-Core-20030226/DOM3-Core.html#core-Text3-replaceWholeText
 Since: DOM Level 3
 */

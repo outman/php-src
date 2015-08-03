@@ -66,7 +66,6 @@ enum _zend_ast_kind {
 	/* 1 child node */
 	ZEND_AST_VAR = 1 << ZEND_AST_NUM_CHILDREN_SHIFT,
 	ZEND_AST_CONST,
-	ZEND_AST_RESOLVE_CLASS_NAME,
 	ZEND_AST_UNPACK,
 	ZEND_AST_UNARY_PLUS,
 	ZEND_AST_UNARY_MINUS,
@@ -84,6 +83,7 @@ enum _zend_ast_kind {
 	ZEND_AST_PRE_DEC,
 	ZEND_AST_POST_INC,
 	ZEND_AST_POST_DEC,
+	ZEND_AST_YIELD_FROM,
 
 	ZEND_AST_GLOBAL,
 	ZEND_AST_UNSET,
@@ -203,7 +203,7 @@ ZEND_API zend_ast *zend_ast_create_decl(
 ZEND_API zend_ast *zend_ast_create_list(uint32_t init_children, zend_ast_kind kind, ...);
 ZEND_API zend_ast *zend_ast_list_add(zend_ast *list, zend_ast *op);
 
-ZEND_API void zend_ast_evaluate(zval *result, zend_ast *ast, zend_class_entry *scope);
+ZEND_API int zend_ast_evaluate(zval *result, zend_ast *ast, zend_class_entry *scope);
 ZEND_API zend_string *zend_ast_export(const char *prefix, zend_ast *ast, const char *suffix);
 
 ZEND_API zend_ast *zend_ast_copy(zend_ast *ast);

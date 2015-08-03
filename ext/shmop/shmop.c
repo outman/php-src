@@ -102,7 +102,7 @@ zend_module_entry shmop_module_entry = {
 	NULL,
 	NULL,
 	PHP_MINFO(shmop),
-	NO_VERSION_YET,
+	PHP_SHMOP_VERSION,
 	STANDARD_MODULE_PROPERTIES
 };
 /* }}} */
@@ -327,8 +327,8 @@ PHP_FUNCTION(shmop_write)
 		RETURN_FALSE;
 	}
 
-	writesize = (data->len < shmop->size - offset) ? data->len : shmop->size - offset;
-	memcpy(shmop->addr + offset, data->val, writesize);
+	writesize = (ZSTR_LEN(data) < shmop->size - offset) ? ZSTR_LEN(data) : shmop->size - offset;
+	memcpy(shmop->addr + offset, ZSTR_VAL(data), writesize);
 
 	RETURN_LONG(writesize);
 }
