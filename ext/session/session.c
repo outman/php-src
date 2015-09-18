@@ -64,6 +64,7 @@ PHPAPI ZEND_DECLARE_MODULE_GLOBALS(ps)
 
 static int php_session_rfc1867_callback(unsigned int event, void *event_data, void **extra);
 static int (*php_session_rfc1867_orig_callback)(unsigned int event, void *event_data, void **extra);
+static void php_session_track_init(void);
 
 /* SessionHandler class */
 zend_class_entry *php_session_class_entry;
@@ -235,6 +236,7 @@ static int php_session_decode(zend_string *data) /* {{{ */
 	}
 	if (PS(serializer)->decode(ZSTR_VAL(data), ZSTR_LEN(data)) == FAILURE) {
 		php_session_destroy();
+		php_session_track_init();
 		php_error_docref(NULL, E_WARNING, "Failed to decode session object. Session has been destroyed");
 		return FAILURE;
 	}
@@ -940,7 +942,7 @@ PS_SERIALIZER_DECODE_FUNC(php_binary) /* {{{ */
 
 		if ((tmp = zend_hash_find(&EG(symbol_table), name))) {
 			if ((Z_TYPE_P(tmp) == IS_ARRAY && Z_ARRVAL_P(tmp) == &EG(symbol_table)) || tmp == &PS(http_session_vars)) {
-				efree(name);
+				zend_string_release(name);
 				continue;
 			}
 		}
@@ -952,6 +954,9 @@ PS_SERIALIZER_DECODE_FUNC(php_binary) /* {{{ */
 				var_replace(&var_hash, &current, zv);
 			} else {
 				zval_ptr_dtor(&current);
+				zend_string_release(name);
+				PHP_VAR_UNSERIALIZE_DESTROY(var_hash);
+				return FAILURE;
 			}
 		}
 		PS_ADD_VARL(name);
@@ -1042,6 +1047,9 @@ PS_SERIALIZER_DECODE_FUNC(php) /* {{{ */
 				var_replace(&var_hash, &current, zv);
 			} else {
 				zval_ptr_dtor(&current);
+				PHP_VAR_UNSERIALIZE_DESTROY(var_hash);
+				zend_string_release(name);
+				return FAILURE;
 			}
 		}
 		PS_ADD_VARL(name);
@@ -1490,6 +1498,10 @@ PHPAPI void php_session_reset_id(void) /* {{{ */
 	}
 
 	if (APPLY_TRANS_SID) {
+		/* FIXME: Resetting vars are required when
+		   session is stop/start/regenerated. However,
+		   php_url_scanner_reset_vars() resets all vars
+		   including other URL rewrites set by elsewhere. */
 		/* php_url_scanner_reset_vars(); */
 		php_url_scanner_add_var(PS(session_name), strlen(PS(session_name)), ZSTR_VAL(PS(id)), ZSTR_LEN(PS(id)), 1);
 	}
@@ -2011,7 +2023,7 @@ static PHP_FUNCTION(session_id)
 static PHP_FUNCTION(session_regenerate_id)
 {
 	zend_bool del_ses = 0;
-	zend_string *data = NULL;
+	zend_string *data;
 
 	if (zend_parse_parameters(ZEND_NUM_ARGS(), "|b", &del_ses) == FAILURE) {
 		return;
@@ -2027,31 +2039,82 @@ static PHP_FUNCTION(session_regenerate_id)
 		RETURN_FALSE;
 	}
 
-	/* Keep current session data */
-	data = php_session_encode();
-
-	if (del_ses && PS(mod)->s_destroy(&PS(mod_data), PS(id)) == FAILURE) {
-		php_error_docref(NULL, E_WARNING, "Session object destruction failed");
-	}
-	php_rshutdown_session_globals();
-	php_rinit_session_globals();
-
-	php_session_initialize();
-	/* Restore session data */
-	if (data) {
-		if (PS(session_vars)) {
-			zend_string_release(PS(session_vars));
-			PS(session_vars) = NULL;
+	/* Process old session data */
+	if (del_ses) {
+		if (PS(mod)->s_destroy(&PS(mod_data), PS(id)) == FAILURE) {
+			PS(mod)->s_close(&PS(mod_data));
+			PS(session_status) = php_session_none;
+			php_error_docref(NULL, E_WARNING, "Session object destruction failed.  ID: %s (path: %s)", PS(mod)->s_name, PS(save_path));
+			RETURN_FALSE;
 		}
-		php_session_decode(data);
+	} else {
+		int ret;
+		data = php_session_encode();
+		if (data) {
+			ret = PS(mod)->s_write(&PS(mod_data), PS(id), data, PS(gc_maxlifetime));
+			zend_string_release(data);
+		} else {
+			ret = PS(mod)->s_write(&PS(mod_data), PS(id), ZSTR_EMPTY_ALLOC(), PS(gc_maxlifetime));
+		}
+		if (ret == FAILURE) {
+			PS(mod)->s_close(&PS(mod_data));
+			PS(session_status) = php_session_none;
+			php_error_docref(NULL, E_WARNING, "Session write failed. ID: %s (path: %s)", PS(mod)->s_name, PS(save_path));
+			RETURN_FALSE;
+		}
+	}
+	PS(mod)->s_close(&PS(mod_data));
+
+	/* New session data */
+	if (PS(session_vars)) {
+		zend_string_release(PS(session_vars));
+		PS(session_vars) = NULL;
+	}
+	zend_string_release(PS(id));
+	PS(id) = PS(mod)->s_create_sid(&PS(mod_data));
+	if (!PS(id)) {
+		PS(session_status) = php_session_none;
+		php_error_docref(NULL, E_RECOVERABLE_ERROR, "Failed to create session ID: %s (path: %s)", PS(mod)->s_name, PS(save_path));
+		RETURN_FALSE;
+	}
+	if (PS(use_strict_mode) && PS(mod)->s_validate_sid &&
+		PS(mod)->s_validate_sid(&PS(mod_data), PS(id)) == FAILURE) {
+		zend_string_release(PS(id));
+		PS(id) = PS(mod)->s_create_sid(&PS(mod_data));
+		if (!PS(id)) {
+			PS(session_status) = php_session_none;
+			php_error_docref(NULL, E_RECOVERABLE_ERROR, "Failed to create session ID: %s (path: %s)", PS(mod)->s_name, PS(save_path));
+			RETURN_FALSE;
+		}
+	}
+	if (PS(mod)->s_open(&PS(mod_data), PS(save_path), PS(session_name)) == FAILURE) {
+		PS(session_status) = php_session_none;
+		php_error_docref(NULL, E_RECOVERABLE_ERROR, "Failed to create session ID: %s (path: %s)", PS(mod)->s_name, PS(save_path));
+		RETURN_FALSE;
+	}
+	/* Read is required to make new session data at this point. */
+	if (PS(mod)->s_read(&PS(mod_data), PS(id), &data, PS(gc_maxlifetime)) == FAILURE) {
+		PS(session_status) = php_session_none;
+		php_error_docref(NULL, E_RECOVERABLE_ERROR, "Failed to create session ID: %s (path: %s)", PS(mod)->s_name, PS(save_path));
+		RETURN_FALSE;
+	}
+	if (data) {
 		zend_string_release(data);
 	}
+
+	if (PS(use_cookies)) {
+		PS(send_cookie) = 1;
+	}
+	php_session_reset_id();
+
 	RETURN_TRUE;
 }
 /* }}} */
 
 /* {{{ proto void session_create_id([string prefix])
    Generate new session ID. Intended for user save handlers. */
+#if 0
+/* This is not used yet */
 static PHP_FUNCTION(session_create_id)
 {
 	zend_string *prefix = NULL, *new_id;
@@ -2089,6 +2152,7 @@ static PHP_FUNCTION(session_create_id)
 	RETVAL_NEW_STR(id.s);
 	smart_str_free(&id);
 }
+#endif
 /* }}} */
 
 /* {{{ proto string session_cache_limiter([string new_cache_limiter])
@@ -2169,8 +2233,7 @@ static PHP_FUNCTION(session_decode)
 	}
 
 	if (php_session_decode(str) == FAILURE) {
-		/* FIXME: session_decode() should return FALSE */
-		/* RETURN_FALSE; */
+		RETURN_FALSE;
 	}
 	RETURN_TRUE;
 }

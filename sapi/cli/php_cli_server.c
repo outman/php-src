@@ -94,7 +94,7 @@
 #include "ext/standard/file.h" /* for php_set_sock_blocking() :-( */
 #include "zend_smart_str.h"
 #include "ext/standard/html.h"
-#include "ext/standard/url.h" /* for php_url_decode() */
+#include "ext/standard/url.h" /* for php_raw_url_decode() */
 #include "ext/standard/php_string.h" /* for php_dirname() */
 #include "php_network.h"
 
@@ -604,6 +604,9 @@ static int sapi_cli_server_register_entry_cb(char **entry, int num_args, va_list
 			}
 		}
 		spprintf(&real_key, 0, "%s_%s", "HTTP", key);
+		if (strcmp(key, "CONTENT_TYPE") == 0 || strcmp(key, "CONTENT_LENGTH") == 0) {
+			sapi_cli_server_register_variable(track_vars_array, key, *entry);
+		}
 		sapi_cli_server_register_variable(track_vars_array, real_key, *entry);
 		efree(key);
 		efree(real_key);
@@ -1464,7 +1467,19 @@ static void normalize_vpath(char **retval, size_t *retval_len, const char *vpath
 		return;
 	}
 
-	decoded_vpath_end = decoded_vpath + php_url_decode(decoded_vpath, (int)vpath_len);
+	decoded_vpath_end = decoded_vpath + php_raw_url_decode(decoded_vpath, (int)vpath_len);
+
+#ifdef PHP_WIN32
+	{
+		char *p = decoded_vpath;
+		
+		do {
+			if (*p == '\\') {
+				*p = '/';
+			}
+		} while (*p++);
+	}
+#endif
 
 	p = decoded_vpath;
 

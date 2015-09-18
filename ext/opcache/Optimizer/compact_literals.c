@@ -263,6 +263,7 @@ void zend_optimizer_compact_literals(zend_op_array *op_array, zend_optimizer_ctx
 				case ZEND_ASSIGN_SUB:
 				case ZEND_ASSIGN_MUL:
 				case ZEND_ASSIGN_DIV:
+				case ZEND_ASSIGN_POW:
 				case ZEND_ASSIGN_MOD:
 				case ZEND_ASSIGN_SL:
 				case ZEND_ASSIGN_SR:
@@ -421,13 +422,13 @@ void zend_optimizer_compact_literals(zend_op_array *op_array, zend_optimizer_ctx
 				case IS_CONSTANT:
 					if (info[i].flags & LITERAL_MAY_MERGE) {
 						if (info[i].flags & LITERAL_EX_OBJ) {
-							int key_len = MAX_LENGTH_OF_LONG + sizeof("->") + Z_STRLEN(op_array->literals[i]);
+							int key_len = MAX_LENGTH_OF_LONG + sizeof("->") - 1 + Z_STRLEN(op_array->literals[i]);
 							key = zend_string_alloc(key_len, 0);
 							ZSTR_LEN(key) = snprintf(ZSTR_VAL(key), ZSTR_LEN(key)-1, "%d->%s", info[i].u.num, Z_STRVAL(op_array->literals[i]));
 						} else if (info[i].flags & LITERAL_EX_CLASS) {
 							int key_len;
 							zval *class_name = &op_array->literals[(info[i].u.num < i) ? map[info[i].u.num] : info[i].u.num];
-							key_len = Z_STRLEN_P(class_name) + sizeof("::") + Z_STRLEN(op_array->literals[i]);
+							key_len = Z_STRLEN_P(class_name) + sizeof("::") - 1 + Z_STRLEN(op_array->literals[i]);
 							key = zend_string_alloc(key_len, 0);
 							memcpy(ZSTR_VAL(key), Z_STRVAL_P(class_name), Z_STRLEN_P(class_name));
 							memcpy(ZSTR_VAL(key) + Z_STRLEN_P(class_name), "::", sizeof("::") - 1);
