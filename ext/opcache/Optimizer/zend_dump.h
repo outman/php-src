@@ -19,9 +19,12 @@
 #ifndef ZEND_DUMP_H
 #define ZEND_DUMP_H
 
+#define ZEND_DUMP_UNREACHABLE          (1<<0)
+
 BEGIN_EXTERN_C()
 
-void zend_dump_op_array(const zend_op_array *op_array, const zend_cfg *cfg, int all);
+void zend_dump_op_array(const zend_op_array *op_array, const zend_cfg *cfg, uint32_t dump_flags, const char *msg);
+void zend_dump_block_info(const zend_cfg *cfg, int n, uint32_t dump_flags);
 
 END_EXTERN_C()
 

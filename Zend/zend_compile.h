@@ -310,6 +310,12 @@ typedef struct _zend_property_info {
 #define OBJ_PROP_TO_NUM(offset) \
 	((offset - OBJ_PROP_TO_OFFSET(0)) / sizeof(zval))
 
+typedef struct _zend_class_constant {
+	zval value; /* access flags are stored in reserved: zval.u2.access_flags */
+	zend_string *doc_comment;
+	zend_class_entry *ce;
+} zend_class_constant;
+
 /* arg_info for internal functions */
 typedef struct _zend_internal_arg_info {
 	const char *name;
@@ -854,7 +860,6 @@ ZEND_API void zend_assert_valid_class_name(const zend_string *const_name);
 #define BP_VAR_IS			3
 #define BP_VAR_FUNC_ARG		4
 #define BP_VAR_UNSET		5
-#define BP_VAR_REF          6   /* right-hand side of by-ref assignment */
 
 /* Bottom 3 bits are the type, top bits are arg num for BP_VAR_FUNC_ARG */
 #define BP_VAR_SHIFT 3
@@ -886,7 +891,6 @@ ZEND_API void zend_assert_valid_class_name(const zend_string *const_name);
 #define ZEND_FETCH_GLOBAL			0x00000000
 #define ZEND_FETCH_LOCAL			0x10000000
 #define ZEND_FETCH_STATIC			0x20000000
-#define ZEND_FETCH_STATIC_MEMBER	0x30000000
 #define ZEND_FETCH_GLOBAL_LOCK		0x40000000
 #define ZEND_FETCH_LEXICAL			0x50000000
 
