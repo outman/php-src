@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | Zend Engine                                                          |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1998-2015 Zend Technologies Ltd. (http://www.zend.com) |
+   | Copyright (c) 1998-2016 Zend Technologies Ltd. (http://www.zend.com) |
    +----------------------------------------------------------------------+
    | This source file is subject to version 2.00 of the Zend license,     |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -397,7 +397,6 @@ static zend_always_inline zend_uchar zval_get_type(const zval* pz) {
 #define IS_TYPE_REFCOUNTED			(1<<2)
 #define IS_TYPE_COLLECTABLE			(1<<3)
 #define IS_TYPE_COPYABLE			(1<<4)
-#define IS_TYPE_SYMBOLTABLE			(1<<5)
 
 /* extended types */
 #define IS_INTERNED_STRING_EX		IS_STRING
@@ -413,8 +412,6 @@ static zend_always_inline zend_uchar zval_get_type(const zval* pz) {
 
 /* zval.u1.v.const_flags */
 #define IS_CONSTANT_UNQUALIFIED		0x010
-#define IS_LEXICAL_VAR				0x020
-#define IS_LEXICAL_REF				0x040
 #define IS_CONSTANT_CLASS           0x080  /* __CLASS__ in trait */
 #define IS_CONSTANT_IN_NAMESPACE	0x100  /* used only in opline->extended_value */
 
@@ -473,9 +470,6 @@ static zend_always_inline zend_uchar zval_get_type(const zval* pz) {
 
 #define Z_IMMUTABLE(zval)			((Z_TYPE_FLAGS(zval) & IS_TYPE_IMMUTABLE) != 0)
 #define Z_IMMUTABLE_P(zval_p)		Z_IMMUTABLE(*(zval_p))
-
-#define Z_SYMBOLTABLE(zval)			((Z_TYPE_FLAGS(zval) & IS_TYPE_SYMBOLTABLE) != 0)
-#define Z_SYMBOLTABLE_P(zval_p)		Z_SYMBOLTABLE(*(zval_p))
 
 /* the following Z_OPT_* macros make better code when Z_TYPE_INFO accessed before */
 #define Z_OPT_TYPE(zval)			(Z_TYPE_INFO(zval) & Z_TYPE_MASK)
@@ -813,7 +807,7 @@ static zend_always_inline zend_uchar zval_get_type(const zval* pz) {
 #define Z_TRY_DELREF(z)				Z_TRY_DELREF_P(&(z))
 
 static zend_always_inline uint32_t zval_refcount_p(zval* pz) {
-	ZEND_ASSERT(Z_REFCOUNTED_P(pz) || Z_IMMUTABLE_P(pz) || Z_SYMBOLTABLE_P(pz));
+	ZEND_ASSERT(Z_REFCOUNTED_P(pz) || Z_IMMUTABLE_P(pz));
 	return GC_REFCOUNT(Z_COUNTED_P(pz));
 }
 

@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | Zend Engine, CFG - Control Flow Graph                                |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1998-2015 The PHP Group                                |
+   | Copyright (c) 1998-2016 The PHP Group                                |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -19,6 +19,7 @@
 #include "php.h"
 #include "zend_compile.h"
 #include "zend_cfg.h"
+#include "zend_func_info.h"
 #include "zend_worklist.h"
 
 static void zend_mark_reachable(zend_op *opcodes, zend_basic_block *blocks, zend_basic_block *b) /* {{{ */
@@ -75,7 +76,7 @@ static void zend_mark_reachable(zend_op *opcodes, zend_basic_block *blocks, zend
 }
 /* }}} */
 
-static void zend_mark_reachable_blocks(zend_op_array *op_array, zend_cfg *cfg, int start) /* {{{ */
+static void zend_mark_reachable_blocks(const zend_op_array *op_array, zend_cfg *cfg, int start) /* {{{ */
 {
 	zend_basic_block *blocks = cfg->blocks;
 
@@ -199,7 +200,7 @@ static void zend_mark_reachable_blocks(zend_op_array *op_array, zend_cfg *cfg, i
 }
 /* }}} */
 
-void zend_cfg_remark_reachable_blocks(zend_op_array *op_array, zend_cfg *cfg) /* {{{ */
+void zend_cfg_remark_reachable_blocks(const zend_op_array *op_array, zend_cfg *cfg) /* {{{ */
 {
 	zend_basic_block *blocks = cfg->blocks;
 	int i;
@@ -232,7 +233,7 @@ static void record_successor(zend_basic_block *blocks, int pred, int n, int succ
 		block_map[i] = 1; \
 	} while (0)
 
-int zend_build_cfg(zend_arena **arena, zend_op_array *op_array, int rt_constants, int stackless, zend_cfg *cfg, uint32_t *func_flags) /* {{{ */
+int zend_build_cfg(zend_arena **arena, const zend_op_array *op_array, uint32_t build_flags, zend_cfg *cfg, uint32_t *func_flags) /* {{{ */
 {
 	uint32_t flags = 0;
 	uint32_t i;
@@ -270,7 +271,7 @@ int zend_build_cfg(zend_arena **arena, zend_op_array *op_array, int rt_constants
 			case ZEND_YIELD:
 			case ZEND_YIELD_FROM:
 				flags |= ZEND_FUNC_TOO_DYNAMIC;
-				if (stackless) {
+				if (build_flags & ZEND_CFG_STACKLESS) {
 					BB_START(i + 1);
 				}
 				break;
@@ -278,7 +279,7 @@ int zend_build_cfg(zend_arena **arena, zend_op_array *op_array, int rt_constants
 			case ZEND_DO_UCALL:
 			case ZEND_DO_FCALL_BY_NAME:
 				flags |= ZEND_FUNC_HAS_CALLS;
-				if (stackless) {
+				if (build_flags & ZEND_CFG_STACKLESS) {
 					BB_START(i + 1);
 				}
 				break;
@@ -286,32 +287,29 @@ int zend_build_cfg(zend_arena **arena, zend_op_array *op_array, int rt_constants
 				flags |= ZEND_FUNC_HAS_CALLS;
 				break;
 			case ZEND_INIT_FCALL:
+			case ZEND_INIT_NS_FCALL_BY_NAME:
 				zv = CRT_CONSTANT(opline->op2);
+				if (opline->opcode == ZEND_INIT_NS_FCALL_BY_NAME) {
+					/* The third literal is the lowercased unqualified name */
+					zv += 2;
+				}
 				if ((fn = zend_hash_find_ptr(EG(function_table), Z_STR_P(zv))) != NULL) {
 					if (fn->type == ZEND_INTERNAL_FUNCTION) {
-						if (Z_STRLEN_P(zv) == sizeof("extract")-1 &&
-						    memcmp(Z_STRVAL_P(zv), "extract", sizeof("extract")-1) == 0) {
+						if (zend_string_equals_literal(Z_STR_P(zv), "extract")) {
 							flags |= ZEND_FUNC_TOO_DYNAMIC;
-						} else if (Z_STRLEN_P(zv) == sizeof("compact")-1 &&
-						    memcmp(Z_STRVAL_P(zv), "compact", sizeof("compact")-1) == 0) {
+						} else if (zend_string_equals_literal(Z_STR_P(zv), "compact")) {
 							flags |= ZEND_FUNC_TOO_DYNAMIC;
-						} else if (Z_STRLEN_P(zv) == sizeof("parse_str")-1 &&
-						    memcmp(Z_STRVAL_P(zv), "parse_str", sizeof("parse_str")-1) == 0) {
+						} else if (zend_string_equals_literal(Z_STR_P(zv), "parse_str")) {
 							flags |= ZEND_FUNC_TOO_DYNAMIC;
-						} else if (Z_STRLEN_P(zv) == sizeof("mb_parse_str")-1 &&
-						    memcmp(Z_STRVAL_P(zv), "mb_parse_str", sizeof("mb_parse_str")-1) == 0) {
+						} else if (zend_string_equals_literal(Z_STR_P(zv), "mb_parse_str")) {
 							flags |= ZEND_FUNC_TOO_DYNAMIC;
-						} else if (Z_STRLEN_P(zv) == sizeof("get_defined_vars")-1 &&
-						    memcmp(Z_STRVAL_P(zv), "get_defined_vars", sizeof("get_defined_vars")-1) == 0) {
+						} else if (zend_string_equals_literal(Z_STR_P(zv), "get_defined_vars")) {
 							flags |= ZEND_FUNC_TOO_DYNAMIC;
-						} else if (Z_STRLEN_P(zv) == sizeof("func_num_args")-1 &&
-						    memcmp(Z_STRVAL_P(zv), "func_num_args", sizeof("func_num_args")-1) == 0) {
+						} else if (zend_string_equals_literal(Z_STR_P(zv), "func_num_args")) {
 							flags |= ZEND_FUNC_VARARG;
-						} else if (Z_STRLEN_P(zv) == sizeof("func_get_arg")-1 &&
-						    memcmp(Z_STRVAL_P(zv), "func_get_arg", sizeof("func_get_arg")-1) == 0) {
+						} else if (zend_string_equals_literal(Z_STR_P(zv), "func_get_arg")) {
 							flags |= ZEND_FUNC_VARARG;
-						} else if (Z_STRLEN_P(zv) == sizeof("func_get_args")-1 &&
-						    memcmp(Z_STRVAL_P(zv), "func_get_args", sizeof("func_get_args")-1) == 0) {
+						} else if (zend_string_equals_literal(Z_STR_P(zv), "func_get_args")) {
 							flags |= ZEND_FUNC_VARARG;
 						}
 					}
@@ -327,11 +325,6 @@ int zend_build_cfg(zend_arena **arena, zend_op_array *op_array, int rt_constants
 				if (i + 1 < op_array->last) {
 					BB_START(i + 1);
 				}
-				break;
-			case ZEND_DECLARE_ANON_CLASS:
-			case ZEND_DECLARE_ANON_INHERITED_CLASS:
-				BB_START(OP_JMP_ADDR(opline, opline->op1) - op_array->opcodes);
-				BB_START(i + 1);
 				break;
 			case ZEND_JMP:
 				BB_START(OP_JMP_ADDR(opline, opline->op1) - op_array->opcodes);
@@ -363,6 +356,8 @@ int zend_build_cfg(zend_arena **arena, zend_op_array *op_array, int rt_constants
 				}
 				BB_START(i + 1);
 				break;
+			case ZEND_DECLARE_ANON_CLASS:
+			case ZEND_DECLARE_ANON_INHERITED_CLASS:
 			case ZEND_FE_FETCH_R:
 			case ZEND_FE_FETCH_RW:
 				BB_START(ZEND_OFFSET_TO_OPLINE_NUM(op_array, opline, opline->extended_value));
@@ -373,24 +368,6 @@ int zend_build_cfg(zend_arena **arena, zend_op_array *op_array, int rt_constants
 			case ZEND_NEW:
 				BB_START(OP_JMP_ADDR(opline, opline->op2) - op_array->opcodes);
 				BB_START(i + 1);
-				break;
-			case ZEND_DECLARE_LAMBDA_FUNCTION: {
-//???					zend_op_array *lambda_op_array;
-//???
-//???					zv = CRT_CONSTANT(opline->op1);
-//???					if (ctx->main_script &&
-//???					    (lambda_op_array = zend_hash_find_ptr(&ctx->main_script->function_table, Z_STR_P(zv))) != NULL) {
-//???						if (lambda_op_array->type == ZEND_USER_FUNCTION &&
-//???						    lambda_op_array->static_variables) {
-//???							// FIXME: Really we should try to perform alias
-//???							// analysis on variables used by the closure
-//???							info->flags |= ZEND_FUNC_TOO_DYNAMIC;
-//???						}
-//???					} else {
-//???						// FIXME: how to find the lambda function?
-						flags |= ZEND_FUNC_TOO_DYNAMIC;
-//???					}
-				}
 				break;
 			case ZEND_UNSET_VAR:
 				if (!(opline->extended_value & ZEND_QUICK_SET)) {
@@ -477,11 +454,6 @@ int zend_build_cfg(zend_arena **arena, zend_op_array *op_array, int rt_constants
 			case ZEND_EXIT:
 			case ZEND_THROW:
 				break;
-			case ZEND_DECLARE_ANON_CLASS:
-			case ZEND_DECLARE_ANON_INHERITED_CLASS:
-				record_successor(blocks, j, 0, block_map[OP_JMP_ADDR(opline, opline->op1) - op_array->opcodes]);
-				record_successor(blocks, j, 1, j + 1);
-				break;
 			case ZEND_JMP:
 				record_successor(blocks, j, 0, block_map[OP_JMP_ADDR(opline, opline->op1) - op_array->opcodes]);
 				break;
@@ -507,6 +479,8 @@ int zend_build_cfg(zend_arena **arena, zend_op_array *op_array, int rt_constants
 					record_successor(blocks, j, 0, j + 1);
 				}
 				break;
+			case ZEND_DECLARE_ANON_CLASS:
+			case ZEND_DECLARE_ANON_INHERITED_CLASS:
 			case ZEND_FE_FETCH_R:
 			case ZEND_FE_FETCH_RW:
 				record_successor(blocks, j, 0, block_map[ZEND_OFFSET_TO_OPLINE_NUM(op_array, opline, opline->extended_value)]);
@@ -532,7 +506,7 @@ int zend_build_cfg(zend_arena **arena, zend_op_array *op_array, int rt_constants
 	zend_mark_reachable_blocks(op_array, cfg, 0);
 
 	if (func_flags) {
-		*func_flags = flags;
+		*func_flags |= flags;
 	}
 
 	return SUCCESS;
@@ -602,7 +576,7 @@ int zend_cfg_build_predecessors(zend_arena **arena, zend_cfg *cfg) /* {{{ */
 }
 /* }}} */
 
-int zend_cfg_compute_dominators_tree(zend_op_array *op_array, zend_cfg *cfg) /* {{{ */
+int zend_cfg_compute_dominators_tree(const zend_op_array *op_array, zend_cfg *cfg) /* {{{ */
 {
 	zend_basic_block *blocks = cfg->blocks;
 	int blocks_count = cfg->blocks_count;
@@ -694,7 +668,7 @@ static int dominates(zend_basic_block *blocks, int a, int b) /* {{{ */
 }
 /* }}} */
 
-int zend_cfg_identify_loops(zend_op_array *op_array, zend_cfg *cfg, uint32_t *flags) /* {{{ */
+int zend_cfg_identify_loops(const zend_op_array *op_array, zend_cfg *cfg, uint32_t *flags) /* {{{ */
 {
 	int i, j, k;
 	int depth;
@@ -702,9 +676,11 @@ int zend_cfg_identify_loops(zend_op_array *op_array, zend_cfg *cfg, uint32_t *fl
 	int *dj_spanning_tree;
 	zend_worklist work;
 	int flag = ZEND_FUNC_NO_LOOPS;
+	ALLOCA_FLAG(list_use_heap);
+	ALLOCA_FLAG(tree_use_heap);
 
-	ZEND_WORKLIST_ALLOCA(&work, cfg->blocks_count);
-	dj_spanning_tree = alloca(sizeof(int) * cfg->blocks_count);
+	ZEND_WORKLIST_ALLOCA(&work, cfg->blocks_count, list_use_heap);
+	dj_spanning_tree = do_alloca(sizeof(int) * cfg->blocks_count, tree_use_heap);
 
 	for (i = 0; i < cfg->blocks_count; i++) {
 		dj_spanning_tree[i] = -1;
@@ -793,6 +769,8 @@ int zend_cfg_identify_loops(zend_op_array *op_array, zend_cfg *cfg, uint32_t *fl
 		}
 	}
 
+	free_alloca(dj_spanning_tree, tree_use_heap);
+	ZEND_WORKLIST_FREE_ALLOCA(&work, list_use_heap);
 	*flags |= flag;
 
 	return SUCCESS;

@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | Zend OPcache                                                         |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1998-2015 The PHP Group                                |
+   | Copyright (c) 1998-2016 The PHP Group                                |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -253,6 +253,10 @@ static void zend_optimize_block(zend_basic_block *block, zend_op_array *op_array
 					    src->opcode != ZEND_FETCH_STATIC_PROP_R &&
 					    src->opcode != ZEND_FETCH_DIM_R &&
 					    src->opcode != ZEND_FETCH_OBJ_R) {
+						if (opline->extended_value & ZEND_FREE_ON_RETURN) {
+							/* mark as removed (empty live range) */
+							op_array->live_range[opline->op2.num].var = (uint32_t)-1;
+						}
 						ZEND_RESULT_TYPE(src) |= EXT_TYPE_UNUSED;
 						MAKE_NOP(opline);
 					}
@@ -836,8 +840,6 @@ static void assemble_code_blocks(zend_cfg *cfg, zend_op_array *op_array)
 		switch (opline->opcode) {
 			case ZEND_FAST_CALL:
 			case ZEND_JMP:
-			case ZEND_DECLARE_ANON_CLASS:
-			case ZEND_DECLARE_ANON_INHERITED_CLASS:
 				ZEND_SET_OP_JMP_ADDR(opline, opline->op1, new_opcodes + blocks[b->successors[0]].start);
 				break;
 			case ZEND_JMPZNZ:
@@ -860,6 +862,8 @@ static void assemble_code_blocks(zend_cfg *cfg, zend_op_array *op_array)
 					opline->extended_value = ZEND_OPLINE_TO_OFFSET(opline, new_opcodes + blocks[b->successors[0]].start);
 				}
 				break;
+			case ZEND_DECLARE_ANON_CLASS:
+			case ZEND_DECLARE_ANON_INHERITED_CLASS:
 			case ZEND_FE_FETCH_R:
 			case ZEND_FE_FETCH_RW:
 				opline->extended_value = ZEND_OPLINE_TO_OFFSET(opline, new_opcodes + blocks[b->successors[0]].start);
@@ -982,7 +986,7 @@ static void assemble_code_blocks(zend_cfg *cfg, zend_op_array *op_array)
 		*opline_num = -1;
 	}
 
-	/* rebild map (just for printing) */
+	/* rebuild map (just for printing) */
 	memset(cfg->map, -1, sizeof(int) * op_array->last);
 	for (n = 0; n < cfg->blocks_count; n++) {
 		if (cfg->blocks[n].flags & ZEND_BB_REACHABLE) {
@@ -1745,13 +1749,13 @@ void optimize_cfg(zend_op_array *op_array, zend_optimizer_ctx *ctx)
 
     /* Build CFG */
 	checkpoint = zend_arena_checkpoint(ctx->arena);
-	if (zend_build_cfg(&ctx->arena, op_array, 0, 0, &cfg, NULL) != SUCCESS) {
+	if (zend_build_cfg(&ctx->arena, op_array, 0, &cfg, NULL) != SUCCESS) {
 		zend_arena_release(&ctx->arena, checkpoint);
 		return;
 	}
 
 	if (ctx->debug_level & ZEND_DUMP_BEFORE_BLOCK_PASS) {
-		zend_dump_op_array(op_array, &cfg, ZEND_DUMP_UNREACHABLE, "before block pass");
+		zend_dump_op_array(op_array, ZEND_DUMP_CFG, "before block pass", &cfg);
 	}
 
 	if (op_array->last_var || op_array->T) {
@@ -1805,7 +1809,7 @@ void optimize_cfg(zend_op_array *op_array, zend_optimizer_ctx *ctx)
 	assemble_code_blocks(&cfg, op_array);
 
 	if (ctx->debug_level & ZEND_DUMP_AFTER_BLOCK_PASS) {
-		zend_dump_op_array(op_array, &cfg, 0, "after block pass");
+		zend_dump_op_array(op_array, ZEND_DUMP_CFG | ZEND_DUMP_HIDE_UNREACHABLE, "after block pass", &cfg);
 	}
 
 	/* Destroy CFG */

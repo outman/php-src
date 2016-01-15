@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | Zend Engine, DFG - Data Flow Graph                                   |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1998-2015 The PHP Group                                |
+   | Copyright (c) 1998-2016 The PHP Group                                |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -20,7 +20,7 @@
 #include "zend_compile.h"
 #include "zend_dfg.h"
 
-int zend_build_dfg(zend_op_array *op_array, zend_cfg *cfg, zend_dfg *dfg) /* {{{ */
+int zend_build_dfg(const zend_op_array *op_array, const zend_cfg *cfg, zend_dfg *dfg) /* {{{ */
 {
 	int set_size;
 	zend_basic_block *blocks = cfg->blocks;
@@ -28,7 +28,7 @@ int zend_build_dfg(zend_op_array *op_array, zend_cfg *cfg, zend_dfg *dfg) /* {{{
 	zend_bitset tmp, gen, def, use, in, out;
 	zend_op *opline;
 	uint32_t k;
-	int j, changed;
+	int j;
 
 	/* FIXME: can we use "gen" instead of "def" for flow analyzing? */
 	set_size = dfg->size;
@@ -92,6 +92,7 @@ int zend_build_dfg(zend_op_array *op_array, zend_cfg *cfg, zend_dfg *dfg) /* {{{
 					case ZEND_ASSIGN:
 					case ZEND_ASSIGN_REF:
 					case ZEND_BIND_GLOBAL:
+					case ZEND_BIND_STATIC:
 					case ZEND_SEND_VAR_EX:
 					case ZEND_SEND_REF:
 					case ZEND_SEND_VAR_NO_REF:
@@ -99,6 +100,7 @@ int zend_build_dfg(zend_op_array *op_array, zend_cfg *cfg, zend_dfg *dfg) /* {{{
 					case ZEND_FE_RESET_RW:
 					case ZEND_ADD_ARRAY_ELEMENT:
 					case ZEND_INIT_ARRAY:
+					case ZEND_BIND_LEXICAL:
 						if (!DFG_ISSET(use, set_size, j, EX_VAR_TO_NUM(opline->op1.var))) {
 							// FIXME: include into "use" to ...?
 							DFG_SET(use, set_size, j, EX_VAR_TO_NUM(opline->op1.var));
@@ -106,6 +108,9 @@ int zend_build_dfg(zend_op_array *op_array, zend_cfg *cfg, zend_dfg *dfg) /* {{{
 						}
 						DFG_SET(gen, set_size, j, EX_VAR_TO_NUM(opline->op1.var));
 						break;
+					case ZEND_UNSET_VAR:
+						ZEND_ASSERT(opline->extended_value & ZEND_QUICK_SET);
+						/* break missing intentionally */
 					case ZEND_ASSIGN_ADD:
 					case ZEND_ASSIGN_SUB:
 					case ZEND_ASSIGN_MUL:
@@ -201,9 +206,20 @@ int zend_build_dfg(zend_op_array *op_array, zend_cfg *cfg, zend_dfg *dfg) /* {{{
 	}
 
 	/* Calculate "in" and "out" sets */
-	do {
-		changed = 0;
+	{
+		uint32_t worklist_len = zend_bitset_len(blocks_count);
+		ALLOCA_FLAG(use_heap);
+		zend_bitset worklist = ZEND_BITSET_ALLOCA(worklist_len, use_heap);
+		memset(worklist, 0, worklist_len * ZEND_BITSET_ELM_SIZE);
 		for (j = 0; j < blocks_count; j++) {
+			zend_bitset_incl(worklist, j);
+		}
+		while (!zend_bitset_empty(worklist, worklist_len)) {
+			/* We use the last block on the worklist, because predecessors tend to be located
+			 * before the succeeding block, so this converges faster. */
+			j = zend_bitset_last(worklist, worklist_len);
+			zend_bitset_excl(worklist, j);
+
 			if ((blocks[j].flags & ZEND_BB_REACHABLE) == 0) {
 				continue;
 			}
@@ -218,22 +234,19 @@ int zend_build_dfg(zend_op_array *op_array, zend_cfg *cfg, zend_dfg *dfg) /* {{{
 			zend_bitset_union_with_difference(tmp, DFG_BITSET(use, set_size, j), DFG_BITSET(out, set_size, j), DFG_BITSET(def, set_size, j), set_size);
 			if (!zend_bitset_equal(DFG_BITSET(in, set_size, j), tmp, set_size)) {
 				zend_bitset_copy(DFG_BITSET(in, set_size, j), tmp, set_size);
-				changed = 1;
+
+				/* Add predecessors of changed block to worklist */
+				{
+					int *predecessors = &cfg->predecessors[blocks[j].predecessor_offset];
+					for (k = 0; k < blocks[j].predecessors_count; k++) {
+						zend_bitset_incl(worklist, predecessors[k]);
+					}
+				}
 			}
 		}
-	} while (changed);
 
-//???D	if (ZCG(accel_directives).jit_debug & JIT_DEBUG_DUMP_LIVENESS) {
-//???D		fprintf(stderr, "Variable Liveness\n");
-//???D		for (j = 0; j < blocks_count; j++) {
-//???D			fprintf(stderr, "  BB%d:\n", j);
-//???D			zend_jit_dump_var_set(op_array, "gen", dfg->gen + (j * dfg->size));
-//???D			zend_jit_dump_var_set(op_array, "def", dfg->def + (j * dfg->size));
-//???D			zend_jit_dump_var_set(op_array, "use", dfg->use + (j * dfg->size));
-//???D			zend_jit_dump_var_set(op_array, "in ", dfg->in  + (j * dfg->size));
-//???D			zend_jit_dump_var_set(op_array, "out", dfg->out + (j * dfg->size));
-//???D		}
-//???D	}
+		free_alloca(worklist, use_heap);
+	}
 
 	return SUCCESS;
 }

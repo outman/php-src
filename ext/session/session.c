@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | PHP Version 7                                                        |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1997-2015 The PHP Group                                |
+   | Copyright (c) 1997-2016 The PHP Group                                |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -97,6 +97,7 @@ zend_class_entry *php_session_update_timestamp_iface_entry;
 #define APPLY_TRANS_SID (PS(use_trans_sid) && !PS(use_only_cookies))
 
 static void php_session_send_cookie(void);
+static void php_session_abort(void);
 
 /* Dispatched by RINIT and by php_session_destroy */
 static inline void php_rinit_session_globals(void) /* {{{ */
@@ -477,11 +478,36 @@ PHPAPI int php_session_valid_key(const char *key) /* {{{ */
 }
 /* }}} */
 
+
+static void php_session_gc(void) /* {{{ */
+{
+	int nrand;
+
+	/* GC must be done before reading session data. */
+	if ((PS(mod_data) || PS(mod_user_implemented)) && PS(gc_probability) > 0) {
+		int nrdels = -1;
+
+		nrand = (int) ((float) PS(gc_divisor) * php_combined_lcg());
+		if (nrand < PS(gc_probability)) {
+			PS(mod)->s_gc(&PS(mod_data), PS(gc_maxlifetime), &nrdels);
+#ifdef SESSION_DEBUG
+			if (nrdels != -1) {
+				php_error_docref(NULL, E_NOTICE, "purged %d expired session objects", nrdels);
+			}
+#endif
+		}
+	}
+} /* }}} */
+
+
 static void php_session_initialize(void) /* {{{ */
 {
 	zend_string *val = NULL;
 
+	PS(session_status) = php_session_active;
+
 	if (!PS(mod)) {
+		PS(session_status) = php_session_disabled;
 		php_error_docref(NULL, E_ERROR, "No storage module chosen - failed to initialize session");
 		return;
 	}
@@ -490,6 +516,7 @@ static void php_session_initialize(void) /* {{{ */
 	if (PS(mod)->s_open(&PS(mod_data), PS(save_path), PS(session_name)) == FAILURE
 		/* || PS(mod_data) == NULL */ /* FIXME: open must set valid PS(mod_data) with success */
 	) {
+		php_session_abort();
 		php_error_docref(NULL, E_ERROR, "Failed to initialize storage module: %s (path: %s)", PS(mod)->s_name, PS(save_path));
 		return;
 	}
@@ -498,6 +525,7 @@ static void php_session_initialize(void) /* {{{ */
 	if (!PS(id)) {
 		PS(id) = PS(mod)->s_create_sid(&PS(mod_data));
 		if (!PS(id)) {
+			php_session_abort();
 			php_error_docref(NULL, E_ERROR, "Failed to create session ID: %s (path: %s)", PS(mod)->s_name, PS(save_path));
 			return;
 		}
@@ -519,16 +547,18 @@ static void php_session_initialize(void) /* {{{ */
 	}
 
 	php_session_reset_id();
-	PS(session_status) = php_session_active;
+
+	/* GC must be done before read */
+	php_session_gc();
 
 	/* Read data */
 	php_session_track_init();
 	if (PS(mod)->s_read(&PS(mod_data), PS(id), &val, PS(gc_maxlifetime)) == FAILURE) {
+		php_session_abort();
 		/* Some broken save handler implementation returns FAILURE for non-existent session ID */
 		/* It's better to raise error for this, but disabled error for better compatibility */
-		/*
-		php_error_docref(NULL, E_NOTICE, "Failed to read session data: %s (path: %s)", PS(mod)->s_name, PS(save_path));
-		*/
+		php_error_docref(NULL, E_WARNING, "Failed to read session data: %s (path: %s)", PS(mod)->s_name, PS(save_path));
+		return;
 	}
 	if (PS(session_vars)) {
 		zend_string_release(PS(session_vars));
@@ -1263,11 +1293,13 @@ static int php_session_cache_limiter(void) /* {{{ */
 	php_session_cache_limiter_t *lim;
 
 	if (PS(cache_limiter)[0] == '\0') return 0;
+	if (PS(session_status) != php_session_active) return -1;
 
 	if (SG(headers_sent)) {
 		const char *output_start_filename = php_output_get_start_filename();
 		int output_start_lineno = php_output_get_start_lineno();
 
+		php_session_abort();
 		if (output_start_filename) {
 			php_error_docref(NULL, E_WARNING, "Cannot send session cache limiter - headers already sent (output started at %s:%d)", output_start_filename, output_start_lineno);
 		} else {
@@ -1513,7 +1545,6 @@ PHPAPI void php_session_start(void) /* {{{ */
 	zval *ppid;
 	zval *data;
 	char *p, *value;
-	int nrand;
 	size_t lensess;
 
 	switch (PS(session_status)) {
@@ -1620,23 +1651,8 @@ PHPAPI void php_session_start(void) /* {{{ */
 		PS(id) = NULL;
 	}
 
-	/* GC must be done before reading session data. */
-	if ((PS(mod_data) || PS(mod_user_implemented)) && PS(gc_probability) > 0) {
-		int nrdels = -1;
-
-		nrand = (int) ((float) PS(gc_divisor) * php_combined_lcg());
-		if (nrand < PS(gc_probability)) {
-			PS(mod)->s_gc(&PS(mod_data), PS(gc_maxlifetime), &nrdels);
-#ifdef SESSION_DEBUG
-			if (nrdels != -1) {
-				php_error_docref(NULL, E_NOTICE, "purged %d expired session objects", nrdels);
-			}
-#endif
-		}
-	}
-
-	php_session_initialize(TSRMLS_C);
-	php_session_cache_limiter(TSRMLS_C);
+	php_session_initialize();
+	php_session_cache_limiter();
 }
 /* }}} */
 
