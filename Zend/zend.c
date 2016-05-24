@@ -148,7 +148,7 @@ static HashTable *global_class_table = NULL;
 static HashTable *global_constants_table = NULL;
 static HashTable *global_auto_globals_table = NULL;
 static HashTable *global_persistent_list = NULL;
-ZEND_TSRMLS_CACHE_DEFINE();
+ZEND_TSRMLS_CACHE_DEFINE()
 #endif
 
 ZEND_API zend_utility_values zend_uv;
@@ -501,7 +501,7 @@ static void compiler_globals_ctor(zend_compiler_globals *compiler_globals) /* {{
 	}
 	compiler_globals->script_encoding_list = NULL;
 
-	zend_interned_empty_string_init(&compiler_globals->empty_string);
+	compiler_globals->empty_string = zend_zts_interned_string_init("", sizeof("")-1);
 
 	memset(compiler_globals->one_char_string, 0, sizeof(compiler_globals->one_char_string));
 }
@@ -529,7 +529,7 @@ static void compiler_globals_dtor(zend_compiler_globals *compiler_globals) /* {{
 	}
 	compiler_globals->last_static_member = 0;
 
-	zend_interned_empty_string_free(&compiler_globals->empty_string);
+	zend_zts_interned_string_free(&compiler_globals->empty_string);
 }
 /* }}} */
 

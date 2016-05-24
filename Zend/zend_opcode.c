@@ -550,7 +550,6 @@ static void zend_resolve_fast_call(zend_op_array *op_array, uint32_t op_num)
 		/* Must be ZEND_FAST_CALL */
 		ZEND_ASSERT(op_array->opcodes[op_array->try_catch_array[finally_num].finally_op - 2].opcode == ZEND_FAST_CALL);
 		op_array->opcodes[op_num].extended_value = ZEND_FAST_CALL_FROM_FINALLY;
-		op_array->opcodes[op_num].op2.num = finally_num;
 	}
 }
 
@@ -673,18 +672,23 @@ ZEND_API int pass_two(zend_op_array *op_array)
 			case ZEND_JMPNZ_EX:
 			case ZEND_JMP_SET:
 			case ZEND_COALESCE:
-			case ZEND_NEW:
 			case ZEND_FE_RESET_R:
 			case ZEND_FE_RESET_RW:
 				ZEND_PASS_TWO_UPDATE_JMP_TARGET(op_array, opline, opline->op2);
 				break;
 			case ZEND_ASSERT_CHECK:
+			{
 				/* If result of assert is unused, result of check is unused as well */
-				if (op_array->opcodes[opline->op2.opline_num - 1].result_type == IS_UNUSED) {
+				zend_op *call = &op_array->opcodes[opline->op2.opline_num - 1];
+				if (call->opcode == ZEND_EXT_FCALL_END) {
+					call--;
+				}
+				if (call->result_type == IS_UNUSED) {
 					opline->result_type = IS_UNUSED;
 				}
 				ZEND_PASS_TWO_UPDATE_JMP_TARGET(op_array, opline, opline->op2);
 				break;
+			}
 			case ZEND_DECLARE_ANON_CLASS:
 			case ZEND_DECLARE_ANON_INHERITED_CLASS:
 			case ZEND_CATCH:
@@ -731,7 +735,7 @@ ZEND_API int pass_two(zend_op_array *op_array)
 	}
 
 	if (op_array->live_range) {
-		uint32_t i;
+		int i;
 
 		for (i = 0; i < op_array->last_live_range; i++) {
 			op_array->live_range[i].var =

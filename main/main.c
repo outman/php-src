@@ -572,7 +572,7 @@ PHP_INI_BEGIN()
 
 	STD_PHP_INI_ENTRY("user_ini.filename",		".user.ini",	PHP_INI_SYSTEM,		OnUpdateString,		user_ini_filename,	php_core_globals,		core_globals)
 	STD_PHP_INI_ENTRY("user_ini.cache_ttl",		"300",			PHP_INI_SYSTEM,		OnUpdateLong,		user_ini_cache_ttl,	php_core_globals,		core_globals)
-	STD_PHP_INI_BOOLEAN("exit_on_timeout",		"0",		PHP_INI_ALL,		OnUpdateBool,			exit_on_timeout,			php_core_globals,	core_globals)
+	STD_PHP_INI_ENTRY("hard_timeout",			"2",			PHP_INI_SYSTEM,		OnUpdateLong,		hard_timeout,		zend_executor_globals,	executor_globals)
 #ifdef PHP_WIN32
 	STD_PHP_INI_BOOLEAN("windows.show_crt_warning",		"0",		PHP_INI_ALL,		OnUpdateBool,			windows_show_crt_warning,			php_core_globals,	core_globals)
 #endif
@@ -1505,8 +1505,6 @@ static ZEND_COLD void php_message_handler_for_zend(zend_long message, const void
 void php_on_timeout(int seconds)
 {
 	PG(connection_status) |= PHP_CONNECTION_TIMEOUT;
-	zend_set_timeout(EG(timeout_seconds), 1);
-	if(PG(exit_on_timeout)) sapi_terminate_process();
 }
 
 #if PHP_SIGCHILD
@@ -1712,6 +1710,9 @@ void php_request_shutdown_for_hook(void *dummy)
 
 	if (PG(modules_activated)) {
 		zend_deactivate_modules();
+	}
+
+	if (PG(modules_activated)) {
 		php_free_shutdown_functions();
 	}
 
@@ -1802,7 +1803,6 @@ void php_request_shutdown(void *dummy)
 	/* 5. Call all extensions RSHUTDOWN functions */
 	if (PG(modules_activated)) {
 		zend_deactivate_modules();
-		php_free_shutdown_functions();
 	}
 
 	/* 6. Shutdown output layer (send the set HTTP headers, cleanup output handlers, etc.) */
@@ -1810,7 +1810,12 @@ void php_request_shutdown(void *dummy)
 		php_output_deactivate();
 	} zend_end_try();
 
-	/* 7. Destroy super-globals */
+	/* 7. Free shutdown functions */
+	if (PG(modules_activated)) {
+		php_free_shutdown_functions();
+	}
+
+	/* 8. Destroy super-globals */
 	zend_try {
 		int i;
 
@@ -1819,37 +1824,37 @@ void php_request_shutdown(void *dummy)
 		}
 	} zend_end_try();
 
-	/* 8. free request-bound globals */
+	/* 9. free request-bound globals */
 	php_free_request_globals();
 
-	/* 9. Shutdown scanner/executor/compiler and restore ini entries */
+	/* 10. Shutdown scanner/executor/compiler and restore ini entries */
 	zend_deactivate();
 
-	/* 10. Call all extensions post-RSHUTDOWN functions */
+	/* 11. Call all extensions post-RSHUTDOWN functions */
 	zend_try {
 		zend_post_deactivate_modules();
 	} zend_end_try();
 
-	/* 11. SAPI related shutdown (free stuff) */
+	/* 12. SAPI related shutdown (free stuff) */
 	zend_try {
 		sapi_deactivate();
 	} zend_end_try();
 
-	/* 12. free virtual CWD memory */
+	/* 13. free virtual CWD memory */
 	virtual_cwd_deactivate();
 
-	/* 13. Destroy stream hashes */
+	/* 14. Destroy stream hashes */
 	zend_try {
 		php_shutdown_stream_hashes();
 	} zend_end_try();
 
-	/* 14. Free Willy (here be crashes) */
+	/* 15. Free Willy (here be crashes) */
 	zend_interned_strings_restore();
 	zend_try {
 		shutdown_memory_manager(CG(unclean_shutdown) || !report_memleaks, 0);
 	} zend_end_try();
 
-	/* 15. Reset max_execution_time */
+	/* 16. Reset max_execution_time */
 	zend_try {
 		zend_unset_timeout();
 	} zend_end_try();

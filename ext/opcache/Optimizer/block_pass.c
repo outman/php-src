@@ -685,6 +685,10 @@ optimize_constant_binary_op:
 						SET_VAR_SOURCE(opline);
 		                opline++;
 						continue;
+					} else if (zend_binary_op_produces_numeric_string_error(opline->opcode, &ZEND_OP1_LITERAL(opline), &ZEND_OP2_LITERAL(opline))) {
+						SET_VAR_SOURCE(opline);
+		                opline++;
+						continue;
 					}
 					er = EG(error_reporting);
 					EG(error_reporting) = 0;
@@ -846,7 +850,6 @@ static void assemble_code_blocks(zend_cfg *cfg, zend_op_array *op_array)
 			case ZEND_JMPNZ_EX:
 			case ZEND_FE_RESET_R:
 			case ZEND_FE_RESET_RW:
-			case ZEND_NEW:
 			case ZEND_JMP_SET:
 			case ZEND_COALESCE:
 			case ZEND_ASSERT_CHECK:
@@ -1186,9 +1189,9 @@ next_target:
 				    		same_type == ZEND_OP1_TYPE(target) &&
 				    		same_var == VAR_NUM_EX(target->op1) &&
 							!(target_block->flags & ZEND_BB_PROTECTED)) {
-					/* JMPZ(X, L), L: X = JMPNZ_EX(X, L2) -> JMPZ(X, L+1) */
+					/* JMPZ(X, L), L: T = JMPNZ_EX(X, L2) -> T = JMPZ_EX(X, L+1) */
 					last_op->opcode += 3;
-					last_op->result = target->result;
+					COPY_NODE(last_op->result, target->result);
 					DEL_SOURCE(block, block->successors[0]);
 					block->successors[0] = target_block->successors[1];
 					ADD_SOURCE(block, block->successors[0]);
@@ -1629,8 +1632,11 @@ static void zend_t_usage(zend_cfg *cfg, zend_op_array *op_array, zend_bitset use
 						case ZEND_BOOL_NOT:
 							if (ZEND_OP1_TYPE(opline) == IS_CONST) {
 								literal_dtor(&ZEND_OP1_LITERAL(opline));
+							} else if (ZEND_OP1_TYPE(opline) == IS_TMP_VAR) {
+								opline->opcode = ZEND_FREE;
+							} else {
+								MAKE_NOP(opline);
 							}
-							MAKE_NOP(opline);
 							break;
 						case ZEND_JMPZ_EX:
 						case ZEND_JMPNZ_EX:
