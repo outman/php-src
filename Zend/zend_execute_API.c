@@ -756,7 +756,7 @@ int zend_call_function(zend_fcall_info *fci, zend_fcall_info_cache *fci_cache) /
 	fci->object = (func->common.fn_flags & ZEND_ACC_STATIC) ?
 		NULL : fci_cache->object;
 
-	call = zend_vm_stack_push_call_frame(ZEND_CALL_TOP_FUNCTION,
+	call = zend_vm_stack_push_call_frame(ZEND_CALL_TOP_FUNCTION | ZEND_CALL_DYNAMIC,
 		func, fci->param_count, fci_cache->called_scope, fci->object);
 	if (fci->object &&
 	    (!EG(objects_store).object_buckets ||
@@ -1157,8 +1157,24 @@ static void zend_set_timeout_ex(zend_long seconds, int reset_signals);
 
 ZEND_API ZEND_NORETURN void zend_timeout(int dummy) /* {{{ */
 {
+#if defined(PHP_WIN32)
+# ifndef ZTS
+	/* No action is needed if we're timed out because zero seconds are
+	   just ignored. Also, the hard timeout needs to be respected. If the
+	   timer is not restarted properly, it could hang in the shutdown
+	   function. */
+	if (EG(hard_timeout) > 0) {
+		EG(timed_out) = 0;
+		zend_set_timeout_ex(EG(hard_timeout), 1);
+		/* XXX Abused, introduce an additional flag if the value needs to be kept. */
+		EG(hard_timeout) = 0;
+	}
+# endif
+#else
 	EG(timed_out) = 0;
 	zend_set_timeout_ex(0, 1);
+#endif
+
 	zend_error_noreturn(E_ERROR, "Maximum execution time of %pd second%s exceeded", EG(timeout_seconds), EG(timeout_seconds) == 1 ? "" : "s");
 }
 /* }}} */
@@ -1688,6 +1704,20 @@ ZEND_API int zend_set_local_var_str(const char *name, size_t len, zval *value, i
 		}
 	}
 	return FAILURE;
+}
+/* }}} */
+
+ZEND_API int zend_forbid_dynamic_call(const char *func_name) /* {{{ */
+{
+	zend_execute_data *ex = EG(current_execute_data);
+	ZEND_ASSERT(ex != NULL && ex->func != NULL);
+
+	if (ZEND_CALL_INFO(ex) & ZEND_CALL_DYNAMIC) {
+		zend_error(E_WARNING, "Cannot call %s dynamically", func_name);
+		return FAILURE;
+	}
+
+	return SUCCESS;
 }
 /* }}} */
 

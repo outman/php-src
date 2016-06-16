@@ -43,7 +43,8 @@ int zend_dfa_analyze_op_array(zend_op_array *op_array, zend_optimizer_ctx *ctx, 
     /* Build SSA */
 	memset(ssa, 0, sizeof(zend_ssa));
 
-	if (zend_build_cfg(&ctx->arena, op_array, 0, &ssa->cfg, flags) != SUCCESS) {
+	if (zend_build_cfg(&ctx->arena, op_array,
+			ZEND_CFG_NO_ENTRY_PREDECESSORS, &ssa->cfg, flags) != SUCCESS) {
 		return FAILURE;
 	}
 
@@ -81,7 +82,7 @@ int zend_dfa_analyze_op_array(zend_op_array *op_array, zend_optimizer_ctx *ctx, 
 	if (ctx->debug_level & ZEND_DUMP_DFA_PHI) {
 		build_flags |= ZEND_SSA_DEBUG_PHI_PLACEMENT;
 	}
-	if (zend_build_ssa(&ctx->arena, op_array, build_flags, ssa, flags) != SUCCESS) {
+	if (zend_build_ssa(&ctx->arena, ctx->script, op_array, build_flags, ssa, flags) != SUCCESS) {
 		return FAILURE;
 	}
 
@@ -129,16 +130,19 @@ static void zend_ssa_remove_nops(zend_op_array *op_array, zend_ssa *ssa)
 	memset(shiftlist, 0, sizeof(uint32_t) * op_array->last);
 	for (b = blocks; b < end; b++) {
 		if (b->flags & (ZEND_BB_REACHABLE|ZEND_BB_UNREACHABLE_FREE)) {
+			uint32_t end;
 			if (b->flags & ZEND_BB_UNREACHABLE_FREE) {
 				/* Only keep the FREE for the loop var */
 				ZEND_ASSERT(op_array->opcodes[b->start].opcode == ZEND_FREE
 						|| op_array->opcodes[b->start].opcode == ZEND_FE_FREE);
-				b->end = b->start;
+				b->len = 1;
 			}
 
+			end = b->start + b->len;
 			i = b->start;
 			b->start = target;
-			while (i <= b->end) {
+			while (i < end) {
+				shiftlist[i] = i - target;
 				if (EXPECTED(op_array->opcodes[i].opcode != ZEND_NOP) ||
 				   /*keep NOP to support ZEND_VM_SMART_BRANCH */
 				   (i > 0 &&
@@ -162,19 +166,18 @@ static void zend_ssa_remove_nops(zend_op_array *op_array, zend_ssa *ssa)
 					if (i != target) {
 						op_array->opcodes[target] = op_array->opcodes[i];
 						ssa->ops[target] = ssa->ops[i];
-						shiftlist[i] = i - target;
 					}
 					target++;
 				}
 				i++;
 			}
-			if (b->end != target - 1) {
+			if (target != end && b->len != 0) {
 				zend_op *opline;
 				zend_op *new_opline;
 
-				opline = op_array->opcodes + b->end;
-				b->end = target - 1;
-				new_opline = op_array->opcodes + b->end;
+				opline = op_array->opcodes + end - 1;
+				b->len = target - b->start;
+				new_opline = op_array->opcodes + target - 1;
 				switch (new_opline->opcode) {
 					case ZEND_JMP:
 					case ZEND_FAST_CALL:
@@ -239,8 +242,8 @@ static void zend_ssa_remove_nops(zend_op_array *op_array, zend_ssa *ssa)
 
 		/* update branch targets */
 		for (b = blocks; b < end; b++) {
-			if (b->flags & ZEND_BB_REACHABLE) {
-				zend_op *opline = op_array->opcodes + b->end;
+			if ((b->flags & ZEND_BB_REACHABLE) && b->len != 0) {
+				zend_op *opline = op_array->opcodes + b->start + b->len - 1;
 
 				switch (opline->opcode) {
 					case ZEND_JMP:
@@ -314,6 +317,30 @@ static void zend_ssa_remove_nops(zend_op_array *op_array, zend_ssa *ssa)
 		op_array->last = target;
 	}
 	free_alloca(shiftlist, use_heap);
+}
+
+static inline zend_bool can_elide_return_type_check(
+		zend_op_array *op_array, zend_ssa *ssa, zend_ssa_op *ssa_op) {
+	zend_arg_info *info = &op_array->arg_info[-1];
+	zend_ssa_var_info *use_info = &ssa->var_info[ssa_op->op1_use];
+	zend_ssa_var_info *def_info = &ssa->var_info[ssa_op->op1_def];
+
+	/* A type is possible that is not in the allowed types */
+	if ((use_info->type & (MAY_BE_ANY|MAY_BE_UNDEF)) & ~(def_info->type & MAY_BE_ANY)) {
+		return 0;
+	}
+
+	if (info->type_hint == IS_CALLABLE) {
+		return 0;
+	}
+
+	if (info->class_name) {
+		if (!use_info->ce || !def_info->ce || !instanceof_function(use_info->ce, def_info->ce)) {
+			return 0;
+		}
+	}
+
+	return 1;
 }
 
 void zend_dfa_optimize_op_array(zend_op_array *op_array, zend_optimizer_ctx *ctx, zend_ssa *ssa)
@@ -520,7 +547,7 @@ void zend_dfa_optimize_op_array(zend_op_array *op_array, zend_optimizer_ctx *ctx
 			 && ssa->ops[op_1].op1_use >= 0
 			 && ssa->ops[op_1].op1_use_chain == -1
 			 && ssa->vars[v].use_chain >= 0
-			 && (ssa->var_info[ssa->ops[op_1].op1_use].type & (MAY_BE_ANY|MAY_BE_UNDEF)) == (ssa->var_info[ssa->ops[op_1].op1_def].type & MAY_BE_ANY)) {
+			 && can_elide_return_type_check(op_array, ssa, &ssa->ops[op_1])) {
 
 // op_1: VERIFY_RETURN_TYPE #orig_var.CV [T] -> #v.CV [T] => NOP
 

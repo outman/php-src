@@ -83,10 +83,10 @@ $vm_op_flags = array(
 	"ZEND_VM_EXT_CONST_FETCH" => 0x06000000,
 	"ZEND_VM_EXT_TYPE"        => 0x07000000,
 	"ZEND_VM_EXT_EVAL"        => 0x08000000,
-	"ZEND_VM_EXT_FAST_CALL"   => 0x09000000,
-	"ZEND_VM_EXT_FAST_RET"    => 0x0a000000,
+	// unused 0x09000000,
+	// unused 0x0a000000,
 	"ZEND_VM_EXT_SRC"         => 0x0b000000,
-	"ZEND_VM_EXT_SEND"        => 0x0c000000,
+	// unused 0x0c000000,
 	"ZEND_VM_NO_CONST_CONST"  => 0x40000000,
 	"ZEND_VM_COMMUTATIVE"     => 0x80000000,
 );
@@ -124,13 +124,10 @@ $vm_ext_decode = array(
 	"ARRAY_INIT"           => ZEND_VM_EXT_ARRAY_INIT,
 	"TYPE"                 => ZEND_VM_EXT_TYPE,
 	"EVAL"                 => ZEND_VM_EXT_EVAL,
-	"FAST_CALL"            => ZEND_VM_EXT_FAST_CALL,
-	"FAST_RET"             => ZEND_VM_EXT_FAST_RET,
 	"ISSET"                => ZEND_VM_EXT_ISSET,
 	"ARG_NUM"              => ZEND_VM_EXT_ARG_NUM,
 	"REF"                  => ZEND_VM_EXT_REF,
 	"SRC"                  => ZEND_VM_EXT_SRC,
-	"SEND"                 => ZEND_VM_EXT_SEND,
 );
 
 $vm_kind_name = array(
@@ -952,7 +949,7 @@ function gen_handler($f, $spec, $kind, $name, $op1, $op2, $use, $code, $lineno, 
 	if ($spec &&
 	    isset($extra_spec["DIM_OBJ"]) &&
 		(($op2 == "UNUSED" && $extra_spec["DIM_OBJ"] != 1) ||
-		 ($op1 == "UNUSED" && $extra_spec["DIM_OBJ"] == 0))) {
+		 ($op1 == "UNUSED" && $extra_spec["DIM_OBJ"] != 2))) {
 	    // Skip useless handlers
 		return;
 	}
@@ -1187,7 +1184,7 @@ function gen_labels($f, $spec, $kind, $prolog, &$specs, $switch_labels = array()
 						return;
 					} else if (isset($extra_spec["DIM_OBJ"]) &&
 						(($op2 == "UNUSED" && $extra_spec["DIM_OBJ"] != 1) ||
-						 ($op1 == "UNUSED" && $extra_spec["DIM_OBJ"] == 0))) {
+						 ($op1 == "UNUSED" && $extra_spec["DIM_OBJ"] != 2))) {
 					    // Skip useless handlers
 						gen_null_label($f, $kind, $prolog);
 						$label++;

@@ -191,6 +191,7 @@ typedef struct _zend_oparray_context {
 	int        backpatch_count;
 	int        in_finally;
 	uint32_t   fast_call_var;
+	uint32_t   try_catch_offset;
 	int        current_brk_cont;
 	int        last_brk_cont;
 	zend_brk_cont_element *brk_cont_array;
@@ -363,8 +364,6 @@ struct _zend_op_array {
 
 	uint32_t *refcount;
 
-	uint32_t this_var;
-
 	uint32_t last;
 	zend_op *opcodes;
 
@@ -473,6 +472,7 @@ struct _zend_execute_data {
 #define ZEND_CALL_RELEASE_THIS       (1 << 6)
 #define ZEND_CALL_ALLOCATED          (1 << 7)
 #define ZEND_CALL_GENERATOR          (1 << 8)
+#define ZEND_CALL_DYNAMIC            (1 << 9)
 
 #define ZEND_CALL_INFO_SHIFT         16
 
@@ -893,11 +893,6 @@ ZEND_API void zend_assert_valid_class_name(const zend_string *const_name);
 
 #define ZEND_FREE_ON_RETURN     (1<<0)
 
-#define ZEND_ARG_SEND_BY_REF (1<<0)
-#define ZEND_ARG_COMPILE_TIME_BOUND (1<<1)
-#define ZEND_ARG_SEND_FUNCTION (1<<2)
-#define ZEND_ARG_SEND_SILENT   (1<<3)
-
 #define ZEND_SEND_BY_VAL     0
 #define ZEND_SEND_BY_REF     1
 #define ZEND_SEND_PREFER_REF 2
@@ -957,11 +952,6 @@ static zend_always_inline int zend_check_arg_send_type(const zend_function *zf, 
 
 #define ZEND_RETURNS_FUNCTION 1<<0
 #define ZEND_RETURNS_VALUE    1<<1
-
-#define ZEND_FAST_RET_TO_CATCH		1
-#define ZEND_FAST_RET_TO_FINALLY	2
-
-#define ZEND_FAST_CALL_FROM_FINALLY	1
 
 #define ZEND_ARRAY_ELEMENT_REF		(1<<0)
 #define ZEND_ARRAY_NOT_PACKED		(1<<1)
